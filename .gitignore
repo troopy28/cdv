@@ -1,0 +1,44 @@
+# Jetbrains stuff.
+/.idea
+
+# CMake stuff.
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+
+# VSCode stuff.
+.vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+.history/
+*.vsix
+.VSCodeCounter*
+
+# clangd cache.
+/.cache/
+
+# Build directories.
+/build*/
+build/
+build
+/.build
+/cmake-build-*
+
+# Others...
+*.dSYM
+*.o
+*.gcno
+*.gcda
+.DS_Store
