@@ -28,9 +28,9 @@ private:
 };
 
 CDV_DECLARE_PUBLIC_MEMBER(MyClass, 0, MyPublicMember)
-CDV_DECLARE_CUSTOM_MEMBER(MyClass, 1, "my_string", get_string())
-CDV_DECLARE_CUSTOM_MEMBER(MyClass, 2, "my_int", get_int())
-CDV_DECLARE_CUSTOM_MEMBER(MyClass, 3, "my_double", get_double())
+CDV_DECLARE_MEMBER(MyClass, 1, "my_string", get_string())
+CDV_DECLARE_MEMBER(MyClass, 2, "my_int", get_int())
+CDV_DECLARE_MEMBER(MyClass, 3, "my_double", get_double())
 
 int main()
 {

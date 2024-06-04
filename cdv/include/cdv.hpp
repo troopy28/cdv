@@ -1702,7 +1702,7 @@ namespace cdv
 
 }
 
-#define CDV_DECLARE_CUSTOM_MEMBER(ClassName, MemberIndex, MemberNameRetrievalExpression, MemberValueGetterExpression)   	\
+#define CDV_DECLARE_MEMBER(ClassName, MemberIndex, MemberNameRetrievalExpression, MemberValueGetterExpression)   	\
 namespace cdv::traits                                                                                                   	\
 {                                                                                                                       	\
     template<>                                                                                                          	\
@@ -1770,5 +1770,5 @@ namespace cdv::traits                                                           
 	};                                                                                                                  	\
 }
 
-
+// TODO : DECLARE_CUSTOM_MEMBER pour déclarer un membre sur lequel on n'appelle pas un getter mais une méthode perso prenant l'instance en paramètre directement.
 
