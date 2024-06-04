@@ -11,6 +11,7 @@
 #include <string_view>
 #include <list>
 #include <limits>
+#include <variant>
 
 namespace cdv
 {
@@ -355,7 +356,7 @@ namespace cdv
         	};
     	};
 
-    	uint64_t hash_combine(uint64_t a, const uint64_t b)
+	    inline uint64_t hash_combine(uint64_t a, const uint64_t b)
     	{
         	constexpr std::hash<uint64_t> hasher;
         	a ^= hasher(b) + 0x9e3779b9 + (a << 6) + (a >> 2);
@@ -532,35 +533,46 @@ namespace cdv
     	node_appearance<string_t> m_appearance{};
 	};
 
-
-    // ----------------------------------------------- table_node------------------------------------------------ //
+	// ------------------------------------------------- table -------------------------------------------------- //
 
 	template<typename string_t /*= std::string*/>
-	class table_node : public base_node<string_t>
+	class table
 	{
 	public:
+    	/**
+     	* @brief A table cell, part of a node row. It holds either a string value,
+     	* or a table itself (to allow recursive table structures).
+     	*/
     	struct cell
     	{
+        	using value_t = string_t; // TODO : support tables inside of cells (recursive tables).
+
+        	value_t value{};
+        	string_t port_name{};
+        	int column_span{ 1 };
+        	int row_span{ 1 };
+
         	static constexpr int default_column_span = 1;
         	static constexpr int default_row_span = 1;
 
         	cell() = default;
 
         	explicit cell(const string_t& _value)
-   			 : value{_value}
+            	: value{ _value }
         	{}
         	explicit cell(string_t&& _value)
-            	: value{ std::move(_value)}
+            	: value{ std::move(_value) }
         	{}
-
-        	string_t value{};
-        	string_t port_name{};
-        	int column_span{ 1 };
-        	int row_span{ 1 };
+        	explicit cell(const table& _value)
+            	: value{ std::make_unique<table>(*_value) } // Copy the table to newly allocated memory.
+        	{}
+        	explicit cell(table&& _value)
+            	: value{ std::make_unique<table>(std::move(_value)) } // Move the table to newly allocated memory.
+        	{}
 
         	/**
          	*
-         	* @tparam value_t Type of the value, must be either a string type, or a type std::to_(w)string can be called on.
+         	* @tparam value_t Type of the value, must be either a string type, or a type std::to_(w)string can be called on, or a table.
          	* @return Cell containing a string representation of the value.
          	* @note Static creation method to work around the issues that can be introduced by directly adding a perfect
          	* forwarding constructor to 'cell': we want cell to be copyable and moveable.
@@ -574,7 +586,7 @@ namespace cdv
         	}
 
         	template<typename value_t>
-        	cell& with_value(string_t&& _value)
+        	cell& with_value(value_t&& _value)
         	{
             	value = cdv::to_string<string_t>(std::forward<value_t>(_value));
             	return *this;
@@ -591,7 +603,7 @@ namespace cdv
         	cell& with_port(string_t&& _port_value)
         	{
             	// The port acts as an ID. Only accept string types and integral types, to avoid, for instance,
-       		 // rounding errors if someone were to use floats for the port.
+            	// rounding errors if someone were to use floats for the port.
             	port_name = std::move(_port_value);
             	return *this;
         	}
@@ -647,18 +659,12 @@ namespace cdv
                 	cells.emplace_back(cdv::to_string<string_t>(std::forward<T1>(cell_value)));
             	}
 
-       		 // Add remaining cells for this row.
+            	// Add remaining cells for this row.
             	build<Ts...>(std::forward<Ts>(other_cell_values)...);
         	}
     	};
 
-    	table_node() :
-   		 base_node<string_t>()
-    	{
-        	// Tables draw their border themselves, therefore use plaintext mode to avoid
-        	// drawing it a second time.
-        	base_node<string_t>::m_appearance.shape = node_shape::plaintext;
-    	}
+    	table() = default;
 
     	void set_cell_spacing(const int cell_spacing_px)
     	{
@@ -684,14 +690,6 @@ namespace cdv
         	m_rows[m_rows.size() - 1].template build<T1, Ts...>(std::forward<T1>(first_cell_value), std::forward<Ts>(other_cell_values)...);
     	}
 
-    	template<typename T1, typename... Ts>
-    	table_node& with_row(T1&& first_cell_value, Ts&&... other_cell_values)
-    	{
-        	// Call add_row and return this for a simple builder-like pattern.
-        	add_row(std::forward<T1>(first_cell_value), std::forward<Ts>(other_cell_values)...);
-        	return *this;
-    	}
-
     	void add_row(const row& row)
     	{
         	m_rows.emplace_back(row);
@@ -702,26 +700,14 @@ namespace cdv
         	m_rows.emplace_back(std::move(row));
     	}
 
-    	[[nodiscard]] string_t generate_structure_string(const node_appearance<string_t>& default_node_appearance) const override
+    	[[nodiscard]] string_t generate_table_html_string() const
     	{
-        	string_t result;
-
-        	// Start structure.
-        	result += lit(string_t, "[");
-        	result += impl::generate_node_appearance_string<string_t>(base_node<string_t>::m_appearance, default_node_appearance);
-
-        	// Special case: we have no rows. Exit now.
         	if(m_rows.empty())
         	{
-            	// Close the HTML table and the node tag.
-            	result += lit(string_t, "</table>>]"); // double '>', one to close table, one to close graphviz html label
-            	return result;
+            	return {};
         	}
 
-        	// Node label, ie the HTML.
-        	result += lit(string_t, "label=<\n\t");
-
-        	// Start HTML table.
+        	string_t result;
         	result += lit(string_t, "<table border=\"");
         	result += cdv::to_string<string_t>(m_table_border);
         	result += lit(string_t, "\" cellborder=\"");
@@ -731,48 +717,89 @@ namespace cdv
         	result += lit(string_t, "\">");
 
         	const size_t cell_count_of_longest_row =
-            	std::max_element(m_rows.begin(), m_rows.end(), [](const row& row1, const row& row2) {
-            	return row1.cells.size() < row2.cells.size();
-   			  })->cells.size();
+   	     	std::max_element(m_rows.begin(), m_rows.end(), [](const row& row1, const row& row2) {
+   		     	return row1.cells.size() < row2.cells.size();
+   	     	})->cells.size();
 
-   		 // Each row.
+        	// Each row.
         	for (const row& current_row : m_rows)
         	{
-            	result += lit(string_t, "<tr>");
+   	     	result += lit(string_t, "<tr>");
 
-            	// Add the cells of this row.
-            	size_t current_column_position = 0;
-       		 for (const cell& cell : current_row.cells) // TODO : std instead of a loop
-            	{
-                	result += impl::generate_table_node_cell_html<string_t>(cell);
-                	current_column_position += cell.column_span;
-            	}
+   	     	// Add the cells of this row.
+   	     	size_t current_column_position = 0;
+   	     	for (const cell& cell : current_row.cells) // TODO : std instead of a loop
+   	     	{
+   		     	result += impl::generate_table_node_cell_html<string_t>(cell);
+   		     	current_column_position += cell.column_span;
+   	     	}
 
-            	// If this row has fewer cells than the longest row, add empty rows at the end.
-            	if(current_column_position < cell_count_of_longest_row)
-            	{
-                	const size_t empty_cells_at_end_of_row = cell_count_of_longest_row - current_column_position;
-                	cell empty_cell{};
-                	for (size_t empty_cell_idx = 0; empty_cell_idx < empty_cells_at_end_of_row; ++empty_cell_idx)
-                	{
-                    	result += impl::generate_table_node_cell_html<string_t>(empty_cell);
-                	}
-            	}
-           	 
+   	     	// If this row has fewer cells than the longest row, add empty rows at the end.
+   	     	if (current_column_position < cell_count_of_longest_row)
+   	     	{
+   		     	const size_t empty_cells_at_end_of_row = cell_count_of_longest_row - current_column_position;
+   		     	cell empty_cell{};
+   		     	for (size_t empty_cell_idx = 0; empty_cell_idx < empty_cells_at_end_of_row; ++empty_cell_idx)
+   		     	{
+   			     	result += impl::generate_table_node_cell_html<string_t>(empty_cell);
+   		     	}
+   	     	}
 
-            	result += lit(string_t, "</tr>");
+   	     	result += lit(string_t, "</tr>");
         	}
 
         	// Close the HTML table and the node tag.
-        	result += lit(string_t, "</table>>]"); // double '>', one to close table, one to close graphviz html label
+        	result += lit(string_t, "</table>");
         	return result;
     	}
 
-	private:
+	protected:
     	std::vector<row> m_rows{};
-    	int m_cell_border{1};
-    	int m_cell_spacing{0};
-    	int m_table_border{0};
+    	int m_cell_border{ 1 };
+    	int m_cell_spacing{ 0 };
+    	int m_table_border{ 0 };
+	};
+
+    // ----------------------------------------------- table_node------------------------------------------------ //
+
+	template<typename string_t /*= std::string*/>
+	class table_node : public table<string_t>, public base_node<string_t>
+	{
+	public:
+    	table_node()
+   		 : table<string_t>()
+        	, base_node<string_t>()
+    	{
+        	// Tables draw their border themselves, therefore use plaintext mode to avoid
+        	// drawing it a second time.
+        	base_node<string_t>::m_appearance.shape = node_shape::plaintext;
+    	}
+
+    	template<typename T1, typename... Ts>
+    	table_node& with_row(T1&& first_cell_value, Ts&&... other_cell_values)
+    	{
+        	// Call add_row and return this for a simple builder-like pattern.
+        	table<string_t>::add_row(std::forward<T1>(first_cell_value), std::forward<Ts>(other_cell_values)...);
+        	return *this;
+    	}
+
+
+    	[[nodiscard]] string_t generate_structure_string(const node_appearance<string_t>& default_node_appearance) const override
+    	{
+        	string_t result;
+
+        	// Start structure.
+        	result += lit(string_t, "[");
+        	result += impl::generate_node_appearance_string<string_t>(base_node<string_t>::m_appearance, default_node_appearance);
+
+   		 // Label, ie content of the table.
+        	result += lit(string_t, "label=<\n\t");
+        	result += table<string_t>::generate_table_html_string();
+        	result += lit(string_t, ">]");
+
+        	//
+        	return result;
+    	}
 	};
 
 
@@ -844,7 +871,27 @@ namespace cdv
     	int requested_rank;
 	};
 
-    // -------------------------------------------------- tags -------------------------------------------------- //
+    /**
+     * Information about how to display a member of a struct / class.
+     */
+    enum class member_display_type
+	{
+    	/**
+     	* Display the data directly inside a cell of the containing instance's node.
+     	* TODO : currently unsupported, falls back on the 'composition_edge' behaviour.
+     	*/
+    	inside,
+    	/**
+     	* Display the data as a separate node, the address of the data inside a cell of the containing instance's node, and a POINTER edge going from the cell to the node.
+     	*/
+    	pointer_edge,
+    	/**
+     	* Display the data as a separate node, the address of the data inside a cell of the containing instance's node, and a COMPOSITION edge going from the cell to the node.
+     	*/
+    	composition_edge,
+	};
+
+    // ------------------------------------------------- traits ------------------------------------------------- //
 
 
 	namespace traits
@@ -886,19 +933,31 @@ namespace cdv
     	{
         	// static auto get_member_name();
         	// static auto get_member_value(const adapted_class_t& instance)
+        	// static
     	};
 
     	template<typename adapted_class_t>
     	constexpr bool is_adapted_v = access<adapted_class_t, 0>::value; // A class is adapted if it declares at least one member.
+
+    	// -------------- global checks -------------
+
+    	template<typename data_t>
+    	constexpr bool is_container_v = is_contiguous_container_v<data_t>
+   		 || is_linked_list_container_v<data_t>
+   		 || is_key_value_container_v<data_t>;
+
+   	 template<typename data_t>
+    	constexpr bool is_handled_by_cdv_v = is_container_v<data_t> // TODO: find better name than "is_handled_by_cdv_v"
+   		 || is_adapted_v<data_t>;
 
 	}
 
 	// Todo: put this in a separate file under "cdv_std_tags.h"
 	namespace traits
 	{
-    	// ----------------------------------------------------------------- //
-    	// DEFAULT IMPLEMENTATION OF REQUIRED TYPE TRAITS FOR STD CONTAINERS //
-    	// ----------------------------------------------------------------- //
+    	// ------------------------------------------------------------------------------------------------------------- //
+    	//                   	DEFAULT IMPLEMENTATION OF REQUIRED TYPE TRAITS FOR STD CONTAINERS                   	//
+    	// ------------------------------------------------------------------------------------------------------------- //
 
     	// Contiguous storage array-like containers.
     	template<typename value_t> struct contiguous_container<std::vector<value_t>> : std::true_type {};
@@ -921,16 +980,62 @@ namespace cdv
     	template<typename key_t, typename value_t> struct key_value_container<std::unordered_map<key_t, value_t>> : std::true_type {};
     	template<typename key_t, typename value_t> struct key_value_container<std::unordered_multimap<key_t, value_t>> : std::true_type {};
 
+    	// ------------------------------------------------------------------------------------------------------------- //
+   	 //                                	DEFAULT ADAPTERS FOR COMMON STD CLASSES                                	//
+   	 // ------------------------------------------------------------------------------------------------------------- //
+
+   	 // std::pair<T1, T2>
+    	template<typename T1, typename T2>
+    	struct access<std::pair<T1, T2>, 0> : std::true_type {
+        	static auto get_member_name() {
+            	return "first";
+        	}
+        	static const auto& get_member_value(const std::pair<T1, T2>& instance) {
+            	return instance.first;
+        	}
+        	static constexpr member_display_type get_member_display_type()
+        	{
+       		 return member_display_type::inside;
+        	}
+    	};
+
+    	template<typename T1, typename T2>
+    	struct access<std::pair<T1, T2>, 1> : std::true_type {
+        	static auto get_member_name() {
+            	return "second";
+        	}
+        	static const auto& get_member_value(const std::pair<T1, T2>& instance) {
+            	return instance.second;
+        	}
+        	static constexpr member_display_type get_member_display_type()
+        	{
+            	return member_display_type::inside;
+        	}
+    	};
+
+    	// std::optional<T>
+    	// todo: adapter for std::optional<T>
 	}
 
 	namespace impl
 	{
-
     	template<typename T>
     	constexpr bool is_value_type()
     	{
         	return !std::is_pointer_v<T> && !std::is_reference_v<T>;
     	}
+
+    	template<typename T>
+    	constexpr bool is_cstring_type_v =
+           	std::is_same_v<std::decay<T>, char*>
+   		 || std::is_same_v<std::decay<T>, wchar_t*>;
+
+    	template<typename T>
+    	constexpr bool is_simple_type_v =
+        	std::is_fundamental_v<T>
+        	|| std::is_constructible_v<std::basic_string<char>, T>
+        	|| std::is_constructible_v<std::basic_string<wchar_t>, T>;
+
 
     	template<typename value_t>
     	uint64_t get_address_as_uint(const value_t* address)
@@ -1212,22 +1317,64 @@ namespace cdv
     	}
 
     	template<typename adapted_class_t, size_t member_index>
-    	void add_rows_for_members(const adapted_class_t& data_structure, table_node<string_t>& node_for_data_structure)
+    	void add_rows_for_members(const adapted_class_t& data_structure, const uint64_t instance_node_id, table_node<string_t>& node_for_data_structure)
     	{
         	// indexed_member_access_t::get_member_name()  : unit -> string_t
         	// indexed_member_access_t::get_member_value() : const adapted_class_t& instance -> auto
         	using indexed_member_access_t = traits::access<adapted_class_t, member_index>;
 
+        	// 1. Add a new row for the current member.
         	auto member_name = indexed_member_access_t::get_member_name();
         	const auto& member_value = indexed_member_access_t::get_member_value(data_structure);
-        	node_for_data_structure.add_row(std::move(member_name), std::move(member_value));
-
-        	// If there's more members to display, iterate over them too.
-        	if constexpr(traits::access<adapted_class_t, member_index + 1>::value)
+        	constexpr member_display_type member_display_method = indexed_member_access_t::get_member_display_type();
+        	if constexpr (
+            	member_display_method == member_display_type::inside
+            	|| member_display_method == member_display_type::composition_edge
+            	)
         	{
-            	add_rows_for_members<adapted_class_t, member_index + 1>(data_structure, node_for_data_structure);
+            	// TODO add_rows_for_members | For now, 'inside' is unsupported. Work needed to properly support it, will be the goal
+            	// TODO add_rows_for_members | of a future commit.
+
+       		 // Address in the vector node.
+            	const auto port_name = cdv::to_string<string_t>(member_index);
+            	node_for_data_structure.add_row(
+                	std::move(member_name),
+                	cell_t{ impl::get_address_as_string<string_t>(&member_value) }.with_port(port_name));
+
+            	// Node for the value.
+            	const uint64_t pointed_node_id = add_data_structure(member_value);
+
+            	// Edge from the cell to the value.
+            	// TODO add_rows_for_members | proper arrow shape for 'composition_edge'
+            	add_edge(
+                	arrow<string_t>{ instance_node_id, port_name, pointed_node_id, lit(string_t, "") }
+   				 .with_style(edge_style::dashed));
+        	}
+        	else // member_display_method == member_display_type::pointer_edge
+        	{
+            	// Address in the vector node.
+            	const auto port_name = cdv::to_string<string_t>(member_index);
+            	node_for_data_structure.add_row(
+                	std::move(member_name),
+                	cell_t{ impl::get_address_as_string<string_t>(&member_value) }.with_port(port_name));
+
+            	// Node for the value.
+            	const uint64_t pointed_node_id = add_data_structure(*member_value);
+
+            	// Edge from the cell to the value.
+            	// TODO add_rows_for_members | proper arrow shape for 'pointer_edge'
+            	add_edge(arrow<string_t>{ instance_node_id, port_name, pointed_node_id, lit(string_t, "") });
+        	}
+
+        	// 2. Recursion to display the next adapted member, if there's one.
+        	if constexpr (traits::access<adapted_class_t, member_index + 1>::value)
+        	{
+            	add_rows_for_members<adapted_class_t, member_index + 1>(data_structure, instance_node_id, node_for_data_structure);
         	}
     	}
+
+   	// std::string pas géré ... faut se débrouiller pour avoir un add_data_structure qui fasse un to_string quand
+   	// rien d'autre ne marche
 
     	template<typename adapted_class_t>
     	uint64_t add_data_structure(
@@ -1255,7 +1402,7 @@ namespace cdv
             	.with_row(std::move(type_name), std::move(instance_address));
 
         	// Loop over adapted members.
-        	add_rows_for_members<adapted_class_t, 0>(data_structure, node_for_instance);
+        	add_rows_for_members<adapted_class_t, 0>(data_structure, node_id, node_for_instance);
         	add_node(node_id, std::move(node_for_instance));
         	return node_id;
     	}
@@ -1263,7 +1410,7 @@ namespace cdv
     	template<typename simple_type_t>
     	uint64_t add_data_structure(
         	const simple_type_t& data_structure,
-        	std::enable_if_t<std::is_fundamental_v<simple_type_t>, bool> = true) // For simple types.
+        	std::enable_if_t<impl::is_simple_type_v<simple_type_t>, bool> = true) // For simple types.
     	{
         	// Add a simple table node:
 
@@ -1283,6 +1430,30 @@ namespace cdv
         	return node_id;
     	}
 
+    	template<typename cstring_type>
+    	uint64_t add_data_structure(
+        	const cstring_type& data_structure,
+        	std::enable_if_t<impl::is_cstring_type_v<cstring_type>, bool> = true) // Special case for C-style strings.
+    	{
+        	// Add a simple table node:
+
+        	// |-------------------------|
+        	// | <Type name> | <Address> |
+        	// |-------------------------|
+        	// |     	<Value>     	|
+        	// |-------------------------|
+
+        	const uint64_t node_id = impl::get_node_id_for_value(data_structure);
+        	auto type_name = impl::get_type_name_string<cstring_type, string_t>();
+        	auto instance_address = impl::get_address_as_string<string_t>(&data_structure);
+        	auto node_for_instance = table_node<string_t>{}
+            	.with_row(std::move(type_name), std::move(instance_address))
+            	.with_row(table_node<string_t>::cell::make(data_structure).spanning_columns(2));
+        	add_node(node_id, std::move(node_for_instance));
+        	return node_id;
+    	}
+
+
 	private:
     	/**
      	* Key   = node ID.
@@ -1297,7 +1468,7 @@ namespace cdv
     	/**
      	*
      	*/
-    	std::vector<cluster<string_t>> m_clusters;
+    	std::vector<cluster<string_t>> m_clusters; // TODO: not handled yet.
 
     	std::vector<rank_constraint> m_rank_constraints;
 
@@ -1541,9 +1712,26 @@ namespace cdv::traits                                                           
    	 {                                                                                                               	\
    	 	return (MemberNameRetrievalExpression);                                                                     	\
    	 }                                                                                                               	\
-   	 static const auto get_member_value(const MyClass& instance)                                                     	\
+   	 static decltype(auto) get_member_value(const MyClass& instance)                                                 	\
    	 {                                                                                                               	\
    	 	return instance.MemberValueGetterExpression;                                                                	\
+   	 }                                                                                                               	\
+   	 static constexpr member_display_type get_member_display_type()                                                  	\
+   	 {                                                                                                               	\
+   	 	using member_t = decltype(get_member_value(std::declval<MyClass>()));                                       	\
+   																														 \
+   	 	if constexpr (std::is_pointer_v<member_t>)                                                                  	\
+   	 	{                                                                                                           	\
+   	     	return member_display_type::pointer_edge;                                                               	\
+   	 	}                                                                                                           	\
+   	 	else if constexpr (cdv::traits::is_handled_by_cdv_v<member_t>)                                              	\
+   	 	{                                                                                                           	\
+   	     	return member_display_type::composition_edge;                                                           	\
+   	 	}                                                                                                           	\
+   	 	else                                                                                                        	\
+   	 	{                                                                                                           	\
+   	     	return member_display_type::inside;                                                                     	\
+   	 	}                                                                                                           	\
    	 }                                                                                                               	\
 	};                                                                                                                  	\
 }
@@ -1558,9 +1746,26 @@ namespace cdv::traits                                                           
    	 {                                                                                                               	\
    	 	return #MemberName;                                                                                         	\
    	 }                                                                                                               	\
-   	 static const auto get_member_value(const MyClass& instance)                                                    	\
+   	 static decltype(auto) get_member_value(const MyClass& instance)                                                 	\
    	 {                                                                                                               	\
    	 	return instance.MemberName;                                                                                 	\
+   	 }                                                                                                               	\
+   	 static constexpr member_display_type get_member_display_type()                                                  	\
+   	 {                                                                                                               	\
+   	 	using member_t = decltype(get_member_value(std::declval<MyClass>()));                                       	\
+   																														 \
+   	 	if constexpr (std::is_pointer_v<member_t>)                                                                  	\
+   	 	{                                                                                                           	\
+   	     	return member_display_type::pointer_edge;                                                               	\
+   	 	}                                                                                                           	\
+   	 	else if constexpr (cdv::traits::is_handled_by_cdv_v<member_t>)                                              	\
+   	 	{                                                                                                           	\
+   	     	return member_display_type::composition_edge;                                                           	\
+   	 	}                                                                                                           	\
+   	 	else                                                                                                        	\
+   	 	{                                                                                                           	\
+   	     	return member_display_type::inside;                                                                     	\
+   	 	}                                                                                                           	\
    	 }                                                                                                               	\
 	};                                                                                                                  	\
 }
@@ -1595,41 +1800,6 @@ CDV_DECLARE_PUBLIC_MEMBER(MyClass, 0, MyPublicMember)
 CDV_DECLARE_CUSTOM_MEMBER(MyClass, 1, "my_string", get_string())
 CDV_DECLARE_CUSTOM_MEMBER(MyClass, 2, "my_int", get_int())
 CDV_DECLARE_CUSTOM_MEMBER(MyClass, 3, "my_double", get_double())
-
-
-namespace cdv::traits // Les adapteurs vivent dans ce namespace
-{
-	template<typename T1, typename T2>
-	struct access<std::pair<T1, T2>, 0> : std::true_type { // Accès au membre 0 (= "pair.first")
-    	static auto get_member_name() {
-        	return "first"; // Le nom du membre dans la table à générer
-    	}
-    	static const auto& get_member_value(const std::pair<T1, T2>& instance) {
-        	return instance.first; // Et sa valeur !
-    	}
-	};
-
-	template<typename T1, typename T2>
-	struct access<std::pair<T1, T2>, 1> : std::true_type { // Accès au membre 1 (= "pair.second")
-    	static auto get_member_name() {
-        	return "second";
-    	}
-    	static const auto& get_member_value(const std::pair<T1, T2>& instance) {
-        	return instance.second;
-    	}
-	};
-
-	template<typename T1, typename T2>
-	struct access<std::pair<T1, T2>, 2> : std::true_type { // Tant qu'on y est, possible d'ajouter des membres fictifs ! Utile si on veut afficher que tel ou tel invariant est vérifié par exemple :)
-    	static auto get_member_name() {
-        	return "first et second ensembles";
-    	}
-    	static auto get_member_value(const std::pair<T1, T2>& instance) {
-        	return cdv::to_string<std::string>(instance.first) + " " + std::to_string(instance.second);
-    	}
-	};
-}
-
 
 int main()
 {
@@ -1714,9 +1884,10 @@ int main()
     	MyClass some_class;
     	my_viz.add_data_structure(some_class);
 
-    	std::pair<std::string, double> my_pair{ "MyStringValue", 42.1 };
-    	my_viz.add_data_structure(my_pair);
+    	// std::pair<std::string, double> my_pair{ "MyStringValue", 42.1 };
+    	// my_viz.add_data_structure(my_pair);
 	}
+   
 
 	// ------------------------------------------------ Text export ------------------------------------------------- //
 
