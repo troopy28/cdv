@@ -7,7 +7,7 @@ C++ Data structure Visualization
 Header-only C++ 17 library providing runtime data structure visualization capabilities, aimed at graphical debugging, visualization of complex hierarchies, and more. General-purpose graph drawing is also available through an intuitive API.
 
 > [!CAUTION]
-> This library is currently in heavy development and no API is entirely stable yet. Many features that are part of the library design goals are still missing and are being worked on.
+> **This library is currently in heavy development** and no API is entirely stable yet. Many features that are part of the library design goals are still missing and are being worked on.
 
 ## Design goals
 
@@ -27,27 +27,27 @@ Custom classes are displayed by declaring their members to the library. This is 
 class MyClass
 {
 public:
-	const std::string& get_string() const
-	{
-    	return my_string;
-	}
+  const std::string& get_string() const
+  {
+    return my_string;
+  }
 
-	int get_int() const
-	{
-    	return my_int;
-	}
+  int get_int() const
+  {
+    return my_int;
+  }
 
-	double get_double() const
-	{
-    	return my_double;
-	}
+  double get_double() const
+  {
+    return my_double;
+  }
 
-	const char* MyPublicMember { "charptr member" };
+  const char* MyPublicMember { "charptr member" };
 
 private:
-	std::string my_string{ "some text" };
-	int my_int{ 24 };
-	double my_double{ 3.14 };
+  std::string my_string{ "some text" };
+  int my_int{ 24 };
+  double my_double{ 3.14 };
 };
 ```
 
