@@ -6,6 +6,10 @@ project(
   DESCRIPTION "C++ Data structure Visualization"
   LANGUAGES CXX)
 
-add_library(cdv STATIC "include/cdv.hpp")
-set_target_properties(cdv PROPERTIES LINKER_LANGUAGE CXX)
-target_compile_features(cdv PUBLIC cxx_std_17)
+set(CMAKE_CXX_EXTENSIONS OFF)                   # Ensure -std=c++xx instead of -std=g++xx.
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)    # Support folders in IDEs.
+  
+add_subdirectory(cdv)
+
+enable_testing()
+add_subdirectory(tests)                         # Code for unit tests.
