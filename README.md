@@ -70,7 +70,7 @@ CDV_DECLARE_MEMBER(MyClass, 1, "my_string", get_string())
 CDV_DECLARE_MEMBER(MyClass, 2, "my_int", get_int())
 CDV_DECLARE_MEMBER(MyClass, 3, "my_double", get_double())
 ```
-The only difference with the previous macro is that the getter method providing access to the member is specified in the last argument:
+The main difference with the previous macro is that the getter method providing access to the member is specified in the last argument:
 
 - The first argument of the macro is, again, the type owning the member.
 - The second argument is, again, the index of the member. 
