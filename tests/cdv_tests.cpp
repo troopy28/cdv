@@ -34,10 +34,9 @@ CDV_DECLARE_MEMBER(MyClass, 3, "my_double", get_double())
 
 void example_1()
 {
+    // A visualization object browses your data and builds the graph
+    // representing the state of your data.
     cdv::visualization<std::string> visualization;
-
-    const std::string some_text{ "The content of the string" };
-    visualization.add_data_structure(some_text); // Just add the string !
 
     int some_int = 12;
     visualization.add_data_structure(some_int); // Just add the integer !
@@ -46,9 +45,14 @@ void example_1()
     visualization.add_data_structure(some_int_pointer); // Just add the pointer !
 
     int** some_int_pointer_pointer = &some_int_pointer;
-    visualization.add_data_structure(some_int_pointer_pointer); // You guessed it!
+    visualization.add_data_structure(some_int_pointer_pointer);
 
-    const std::string my_graphviz_text = cdv::generate_visualization_string(visualization);
+    // Create a pair, referencing the two previous pointers.
+    const std::pair<int*&, int**&> my_pair{ some_int_pointer, some_int_pointer_pointer };
+    visualization.add_data_structure(my_pair);
+
+    // Export the visualization as a GraphViz string.
+    const std::string my_graphviz_text = cdv::generate_dot_visualization_string(visualization);
     std::cout << my_graphviz_text << std::endl;
 }
 
@@ -142,7 +146,7 @@ void big_example()
 
     // ------------------------------------------------ Text export ------------------------------------------------- //
 
-    const std::string my_graphviz_text = cdv::generate_visualization_string(my_viz);
+    const std::string my_graphviz_text = cdv::generate_dot_visualization_string(my_viz);
     std::cout << my_graphviz_text << std::endl;
 
 }
