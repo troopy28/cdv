@@ -967,7 +967,7 @@ struct access : std::false_type
 {
     // static auto get_member_name();
     // static auto get_member_value(const adapted_class_t& instance)
-    // static
+    // static bool display_member();
 };
 
 template <typename adapted_class_t>
@@ -1034,7 +1034,7 @@ struct key_value_container<std::unordered_multimap<key_t, value_t>> : std::true_
 };
 
 // ------------------------------------------------------------------------------------------------------------- //
-//                                	DEFAULT ADAPTERS FOR COMMON STD CLASSES                                	//
+//                                  	DEFAULT ADAPTERS FOR COMMON STD CLASSES                             	 //
 // ------------------------------------------------------------------------------------------------------------- //
 
 // std::pair<T1, T2>
@@ -1053,6 +1053,10 @@ struct access<std::pair<T1, T2>, 0> : std::true_type
     {
         return member_display_type::inside;
     }
+    static bool display_member(const std::pair<T1, T2> &)
+    {
+        return true;
+    }
 };
 
 template <typename T1, typename T2>
@@ -1070,10 +1074,55 @@ struct access<std::pair<T1, T2>, 1> : std::true_type
     {
         return member_display_type::inside;
     }
+    static bool display_member(const std::pair<T1, T2> &)
+    {
+        return true;
+    }
 };
 
 // std::optional<T>
-// todo: adapter for std::optional<T>
+template <typename value_t>
+struct access<std::optional<value_t>, 0> : std::true_type
+{
+    static auto get_member_name()
+    {
+        return "has_value()";
+    }
+    static bool get_member_value(const std::optional<value_t> &instance)
+    {
+        return instance.has_value();
+    }
+    static constexpr member_display_type get_member_display_type()
+    {
+        return member_display_type::inside;
+    }
+    static bool display_member(const std::optional<value_t> &)
+    {
+        return true;
+    }
+};
+
+template <typename value_t>
+struct access<std::optional<value_t>, 1> : std::true_type
+{
+    static auto get_member_name()
+    {
+        return "value";
+    }
+    static auto get_member_value(const std::optional<value_t> &instance)
+    {
+        return instance.value();
+    }
+    static constexpr member_display_type get_member_display_type()
+    {
+        return member_display_type::inside;
+    }
+    static bool display_member(const std::optional<value_t> &instance)
+    {
+        return instance.has_value();
+    }
+};
+
 } // namespace traits
 
 namespace impl
@@ -1090,6 +1139,15 @@ constexpr bool is_cstring_type_v = std::is_same_v<std::decay<T>, char *> || std:
 template <typename T>
 constexpr bool is_simple_type_v = std::is_fundamental_v<T> || std::is_constructible_v<std::basic_string<char>, T> ||
                                   std::is_constructible_v<std::basic_string<wchar_t>, T>;
+
+template <class T, template <class...> class Template>
+struct is_specialization : std::false_type
+{
+};
+template <template <class...> class Template, class... Args>
+struct is_specialization<Template<Args...>, Template> : std::true_type
+{
+};
 
 template <typename value_t>
 uint64_t get_node_id_for_value(const value_t &value)
@@ -1371,47 +1429,49 @@ class visualization : public cluster<string_t>
     {
         // indexed_member_access_t::get_member_name()  : unit -> string_t
         // indexed_member_access_t::get_member_value() : const adapted_class_t& instance -> auto
+        // indexed_member_access_t::display_member()   : const adapted_class_t& instance -> bool
         using indexed_member_access_t = traits::access<adapted_class_t, member_index>;
 
         // 1. Add a new row for the current member.
-        auto member_name = indexed_member_access_t::get_member_name();
-        const auto &member_value = indexed_member_access_t::get_member_value(data_structure);
-        constexpr member_display_type member_display_method = indexed_member_access_t::get_member_display_type();
-        if constexpr (member_display_method == member_display_type::inside ||
-                      member_display_method == member_display_type::composition_edge)
+        if (indexed_member_access_t::display_member(data_structure))
         {
-            // TODO add_rows_for_members | For now, 'inside' is unsupported. Work needed to properly support it, will be
-            // the goal
-            // TODO add_rows_for_members | of a future commit.
+            auto member_name = indexed_member_access_t::get_member_name();
+            const auto &member_value = indexed_member_access_t::get_member_value(data_structure);
+            constexpr member_display_type member_display_method = indexed_member_access_t::get_member_display_type();
+            if constexpr (member_display_method == member_display_type::inside ||
+                          member_display_method == member_display_type::composition_edge)
+            {
+                // TODO add_rows_for_members | For now, 'inside' is unsupported. Work needed to properly support it,
+                // TODO add_rows_for_members | will be the goal of a future commit.
+                // Address in the vector node.
+                const auto port_name = cdv::to_string<string_t>(member_index);
+                node_for_data_structure.add_row(
+                    std::move(member_name),
+                    cell_t{impl::get_address_as_string<string_t>(&member_value)}.with_port(port_name));
 
-            // Address in the vector node.
-            const auto port_name = cdv::to_string<string_t>(member_index);
-            node_for_data_structure.add_row(
-                std::move(member_name),
-                cell_t{impl::get_address_as_string<string_t>(&member_value)}.with_port(port_name));
+                // Node for the value.
+                const uint64_t pointed_node_id = add_data_structure(member_value);
 
-            // Node for the value.
-            const uint64_t pointed_node_id = add_data_structure(member_value);
+                // Edge from the cell to the value.
+                // TODO add_rows_for_members | proper arrow shape for 'composition_edge'
+                add_edge(arrow<string_t>{instance_node_id, port_name, pointed_node_id, lit(string_t, "")}.with_style(
+                    edge_style::dashed));
+            }
+            else // member_display_method == member_display_type::pointer_edge
+            {
+                // Address in the vector node.
+                const auto port_name = cdv::to_string<string_t>(member_index);
+                node_for_data_structure.add_row(
+                    std::move(member_name),
+                    cell_t{impl::get_address_as_string<string_t>(&member_value)}.with_port(port_name));
 
-            // Edge from the cell to the value.
-            // TODO add_rows_for_members | proper arrow shape for 'composition_edge'
-            add_edge(arrow<string_t>{instance_node_id, port_name, pointed_node_id, lit(string_t, "")}.with_style(
-                edge_style::dashed));
-        }
-        else // member_display_method == member_display_type::pointer_edge
-        {
-            // Address in the vector node.
-            const auto port_name = cdv::to_string<string_t>(member_index);
-            node_for_data_structure.add_row(
-                std::move(member_name),
-                cell_t{impl::get_address_as_string<string_t>(&member_value)}.with_port(port_name));
+                // Node for the value.
+                const uint64_t pointed_node_id = add_data_structure(*member_value);
 
-            // Node for the value.
-            const uint64_t pointed_node_id = add_data_structure(*member_value);
-
-            // Edge from the cell to the value.
-            // TODO add_rows_for_members | proper arrow shape for 'pointer_edge'
-            add_edge(arrow<string_t>{instance_node_id, port_name, pointed_node_id, lit(string_t, "")});
+                // Edge from the cell to the value.
+                // TODO add_rows_for_members | proper arrow shape for 'pointer_edge'
+                add_edge(arrow<string_t>{instance_node_id, port_name, pointed_node_id, lit(string_t, "")});
+            }
         }
 
         // 2. Recursion to display the next adapted member, if there's one.
@@ -1433,13 +1493,13 @@ class visualization : public cluster<string_t>
         // Add a table node referencing all adapted members :
 
         // |-------------------------------------|
-        // |   <Type name>	| 	<Address>	|
+        // |   <Type name>    |    <Address>     |
         // |-------------------------------------|
         // | <Member Name 1>  | <Member Value 1> |
         // |-------------------------------------|
         // | <Member Name 2>  | <Member Value 2> |
         // |-------------------------------------|
-        // |             	...             	|
+        // |             	...             	 |
         // |-------------------------------------|
 
         const uint64_t node_id = impl::get_node_id_for_value(data_structure);
@@ -1465,7 +1525,7 @@ class visualization : public cluster<string_t>
         // |-------------------------|
         // | <Type name> | <Address> |
         // |-------------------------|
-        // |     	<Value>     	|
+        // |     	  <Value>        |
         // |-------------------------|
 
         const uint64_t node_id = impl::get_node_id_for_value(data_structure);
@@ -1813,6 +1873,10 @@ template <typename string_t>
                 return member_display_type::inside;                                                                    \
             }                                                                                                          \
         }                                                                                                              \
+        static bool display_member(const MyClass &)                                                                    \
+        {                                                                                                              \
+            return true;                                                                                               \
+        }                                                                                                              \
     };                                                                                                                 \
     }
 
@@ -1846,6 +1910,10 @@ template <typename string_t>
             {                                                                                                          \
                 return member_display_type::inside;                                                                    \
             }                                                                                                          \
+        }                                                                                                              \
+        static bool display_member(const MyClass &)                                                                    \
+        {                                                                                                              \
+            return true;                                                                                               \
         }                                                                                                              \
     };                                                                                                                 \
     }
