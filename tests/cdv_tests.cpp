@@ -1,30 +1,29 @@
-#include "../cdv/include/cdv.hpp"
-
+#include "../include/cdv/cdv.hpp"
 
 class MyClass
 {
-public:
-	const std::string& get_string() const
-	{
-    	return my_string;
-	}
+  public:
+    const std::string &get_string() const
+    {
+        return my_string;
+    }
 
-	int get_int() const
-	{
-    	return my_int;
-	}
+    int get_int() const
+    {
+        return my_int;
+    }
 
-	double get_double() const
-	{
-    	return my_double;
-	}
+    double get_double() const
+    {
+        return my_double;
+    }
 
-	const char* MyPublicMember { "charptr member" };
+    const char *MyPublicMember{"charptr member"};
 
-private:
-	std::string my_string{ "some text" };
-	int my_int{ 24 };
-	double my_double{ 3.14 };
+  private:
+    std::string my_string{"some text"};
+    int my_int{24};
+    double my_double{3.14};
 };
 
 CDV_DECLARE_PUBLIC_MEMBER(MyClass, 0, MyPublicMember)
@@ -41,19 +40,34 @@ void example_1()
     int some_int = 12;
     visualization.add_data_structure(some_int); // Just add the integer !
 
-    int* some_int_pointer = &some_int;
+    int *some_int_pointer = &some_int;
     visualization.add_data_structure(some_int_pointer); // Just add the pointer !
 
-    int** some_int_pointer_pointer = &some_int_pointer;
+    int **some_int_pointer_pointer = &some_int_pointer;
     visualization.add_data_structure(some_int_pointer_pointer);
 
     // Create a pair, referencing the two previous pointers.
-    const std::pair<int*&, int**&> my_pair{ some_int_pointer, some_int_pointer_pointer };
+    const std::pair<int *&, int **&> my_pair{some_int_pointer, some_int_pointer_pointer};
     visualization.add_data_structure(my_pair);
 
     // Export the visualization as a GraphViz string.
     const std::string my_graphviz_text = cdv::generate_dot_visualization_string(visualization);
     std::cout << my_graphviz_text << std::endl;
+}
+
+void example_2_optional()
+{
+    cdv::visualization<std::string> visualization;
+
+    std::optional<int *> empty_optional = std::nullopt;
+    visualization.add_data_structure(empty_optional);
+
+    int my_int = 3;
+    int *my_int_ptr = &my_int;
+    std::optional<int *> valued_optional = my_int_ptr;
+    visualization.add_data_structure(valued_optional);
+
+    std::cout << cdv::generate_dot_visualization_string(visualization) << std::endl;
 }
 
 void big_example()
@@ -66,16 +80,17 @@ void big_example()
     // -------------------------------------------- Example table nodes --------------------------------------------- //
 
     {
-        auto my_table_node = cdv::table_node{}
-            .with_row(cell{ "First Node" }.spanning_columns(3))
-            .with_row(cell{ "Row 1" }.with_port("mySourcePort"), cell::make(3.14), "Note: longer row than others")
-            .with_row("Row 2", 6.71)
-            .with_row("Row 3", "Types can change from one row to the other!");
+        auto my_table_node =
+            cdv::table_node{}
+                .with_row(cell{"First Node"}.spanning_columns(3))
+                .with_row(cell{"Row 1"}.with_port("mySourcePort"), cell::make(3.14), "Note: longer row than others")
+                .with_row("Row 2", 6.71)
+                .with_row("Row 3", "Types can change from one row to the other!");
 
-        auto my_second_table_node = cdv::table_node{}
-            .with_row(cell{ "Second Node" }.spanning_columns(4))
-            .with_row("Baby", "tiny", cell{ "node" }.with_port("myDestinationPort"), "on one row only!");
-
+        auto my_second_table_node =
+            cdv::table_node{}
+                .with_row(cell{"Second Node"}.spanning_columns(4))
+                .with_row("Baby", "tiny", cell{"node"}.with_port("myDestinationPort"), "on one row only!");
     }
     // ------------------------------------------- Visualization creation ------------------------------------------- //
 
@@ -98,36 +113,36 @@ void big_example()
         my_int_vec.reserve(10);
         for (int i = 0; i < 10; ++i)
             my_int_vec.emplace_back(i);
-        //my_viz.add_data_structure(my_int_vec);
+        // my_viz.add_data_structure(my_int_vec);
 
-        std::vector<double*> my_double_ptr_vec; // Un vecteur de pointeurs sur des doubles.
+        std::vector<double *> my_double_ptr_vec; // Un vecteur de pointeurs sur des doubles.
         my_double_ptr_vec.reserve(10);
         for (int i = 0; i < 10; ++i)
             my_double_ptr_vec.emplace_back(new double(i * 2.0 + 0.4));
-        //my_viz.add_data_structure(my_double_ptr_vec);
+        // my_viz.add_data_structure(my_double_ptr_vec);
 
         {
-            std::vector<std::vector<int*>*> test;
+            std::vector<std::vector<int *> *> test;
             for (int vecidx = 0; vecidx < 5; vecidx++)
             {
-                std::vector<int*>* vec = new std::vector<int*>;
+                std::vector<int *> *vec = new std::vector<int *>;
                 for (int k = 0; k < 5; ++k)
                 {
                     vec->emplace_back(new int(k * 2 + 1));
                 }
                 test.emplace_back(vec);
             }
-            //my_viz.add_data_structure(test);
+            // my_viz.add_data_structure(test);
         }
 
-        //my_viz.add_data_structure(3); // Un bête entier.
+        // my_viz.add_data_structure(3); // Un bête entier.
 
         std::list<int> my_int_list; // Une liste d'entiers.
         for (int i = 0; i < 10; ++i)
             my_int_list.emplace_back(i);
-        //my_viz.add_data_structure(my_int_list, true);
+        // my_viz.add_data_structure(my_int_list, true);
 
-        std::forward_list<int*> my_intptr_list; // Une liste de pointeurs sur des entiers.
+        std::forward_list<int *> my_intptr_list; // Une liste de pointeurs sur des entiers.
         for (int i = 0; i < 10; ++i)
             my_intptr_list.emplace_front(new int(i * 3 % 5));
         my_viz.add_data_structure(my_intptr_list);
@@ -143,16 +158,14 @@ void big_example()
         // my_viz.add_data_structure(my_pair);
     }
 
-
     // ------------------------------------------------ Text export ------------------------------------------------- //
 
     const std::string my_graphviz_text = cdv::generate_dot_visualization_string(my_viz);
     std::cout << my_graphviz_text << std::endl;
-
 }
 
 int main()
 {
-    example_1();
-	return 0;
+    example_2_optional();
+    return 0;
 }
