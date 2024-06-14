@@ -15,6 +15,7 @@
 #include <list>
 #include <limits>
 #include <variant>
+#include <optional>
 
 namespace cdv
 {
@@ -879,9 +880,14 @@ namespace cdv
             return *this;
         }
 
-        bool operator==(const arrow& rhs)
+        bool operator==(const arrow& rhs) const
         {
-            return true;
+            return shape == rhs.shape
+                && style == rhs.style
+                && source_node_id == rhs.source_node_id
+                && destination_node_id == rhs.destination_node_id
+                && source_port == rhs.source_port
+                && destination_port == rhs.destination_port;
         }
 
         // Visual appearance information.
@@ -1133,15 +1139,15 @@ namespace cdv
             return m_directed_edges[m_directed_edges.size() - 1];
         }
 
-        void add_unique_edge(const arrow<string_t>& arrow)
+        std::optional<std::reference_wrapper<arrow<string_t>>> add_unique_edge(const arrow<string_t>& arrow)
         {
             const auto iterator = std::find(m_directed_edges.cbegin(), m_directed_edges.cend(), arrow);
             if(iterator != m_directed_edges.end())
             {
-                return;
+                return std::nullopt;
             }
             m_directed_edges.emplace_back(arrow);
-            // return m_directed_edges[m_directed_edges.size() - 1];
+            return m_directed_edges[m_directed_edges.size() - 1];
         }
 
         void add_rank_constraint(const rank_constraint& constraint)
