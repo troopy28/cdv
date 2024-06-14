@@ -1,3 +1,6 @@
+#ifndef CDV_HPP
+#define CDV_HPP
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -1825,3 +1828,4 @@ namespace cdv::traits                                                           
 
 // TODO : DECLARE_CUSTOM_MEMBER pour déclarer un membre sur lequel on n'appelle pas un getter mais une méthode perso prenant l'instance en paramètre directement.
 
+#endif // CDV_HPP
