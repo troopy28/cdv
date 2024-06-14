@@ -1,3 +1,7 @@
+![Static Badge](https://img.shields.io/badge/C%2B%2B-17-blue)
+![Static Badge](https://img.shields.io/badge/License-BSL-green)
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/595f5fba2daa4b7784dae450137bbfea)](https://app.codacy.com/gh/troopy28/cdv?utm_source=github.com&utm_medium=referral&utm_content=troopy28/cdv&utm_campaign=Badge_Grade)
+
 # cdv
 
 C++ Data structure Visualization
@@ -55,7 +59,7 @@ It also demonstrates several key concepts of CDV:
 - **CDV is recursive**. When an object's members can be reached by CDV, it dives inside and browses all the data inside of it, building the data graph. If you have objects **referencing each others**, CDV detects it. 
 - No matter what you are trying to display, simply call `add_data_structure`. CDV resolves how to browse the data for the type given as a parameter: default type, std container, custom classes, etc.
 - References and pointers are displayed as arrows. By default, references are shown using dashed arrows, and pointers using normal arrows.
-- CDV handles a large number of std containers and utilities (here, `std::pair<T1, T2>`)
+- CDV handles a large number of std containers and utilities (here, `std::pair<T1, T2>`).
 
 ### Displaying containers of the standard library
 The containers of the standard library are supported out of the box by the library. To display a container, simply do:
