@@ -436,6 +436,11 @@ namespace cdv
         template<typename string_t>
         void make_html_compatible(string_t& str)
         {
+            // First and foremost : replace all '&' by '&amp;'.
+            // Do this BEFORE any other replacement, as those will be creating '&'s as part of HTML codes.
+            replace_all(str, string_t{ lit(string_t, "&") }, string_t{ lit(string_t, "&amp;") });
+
+            // Then replace other problematic characters.
             replace_all(str, string_t{ lit(string_t, "<") }, string_t{ lit(string_t, "&lt;") });
             replace_all(str, string_t{ lit(string_t, ">") }, string_t{ lit(string_t, "&gt;") });
         }
