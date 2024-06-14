@@ -1,10 +1,11 @@
-![Static Badge](https://img.shields.io/badge/C%2B%2B-17-blue)
-![Static Badge](https://img.shields.io/badge/License-BSL-green)
-[![Codacy Badge](https://api.codacy.com/project/badge/Grade/595f5fba2daa4b7784dae450137bbfea)](https://app.codacy.com/gh/troopy28/cdv?utm_source=github.com&utm_medium=referral&utm_content=troopy28/cdv&utm_campaign=Badge_Grade)
-
 # cdv
 
 C++ Data structure Visualization
+<p align="center">
+  ![Static Badge](https://img.shields.io/badge/C%2B%2B-17-blue)
+  ![Static Badge](https://img.shields.io/badge/License-BSL-green)
+  [![Codacy Badge](https://api.codacy.com/project/badge/Grade/595f5fba2daa4b7784dae450137bbfea)](https://app.codacy.com/gh/troopy28/cdv?utm_source=github.com&utm_medium=referral&utm_content=troopy28/cdv&utm_campaign=Badge_Grade)
+</p>
 
 ## Introduction
 
