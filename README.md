@@ -1,5 +1,7 @@
 # cdv
 
+[![Codacy Badge](https://api.codacy.com/project/badge/Grade/595f5fba2daa4b7784dae450137bbfea)](https://app.codacy.com/gh/troopy28/cdv?utm_source=github.com&utm_medium=referral&utm_content=troopy28/cdv&utm_campaign=Badge_Grade)
+
 C++ Data structure Visualization
 
 ## Introduction
