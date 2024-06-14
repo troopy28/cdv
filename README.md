@@ -13,12 +13,60 @@ Header-only C++ 17 library providing runtime data structure visualization capabi
 
 There already are some C++ data structure visualization libraries out there. This one attempts to tick the following boxes:
 - **Seamless standard library support**: printing a hierarchy of std containers, such as a `std::vector<std::vector<int*>>`, is a simple function call ([displaying containers of the standard library](#Displaying-containers-of-the-standard-library)). 
-- **Flexible**: the non-intrusive adapter-based approach of this library means no modification of existing code is required to visualize data structures. Custom classes can be visualized just by letting the library know about their members ([displaying a custom class](#Displaying-a-custom-class)). This means you can also display classes from external libraries that you cannot modify! ([displaying external library classes](#Adapting-existing-classes-from-other-libraries)) 
-- **Simple integration**: the library is header-only, and entirely fits in the `cdv.hpp` header file. No external dependencies. 
+- **Flexible**: the non-intrusive adapter-based approach of this library means no **modification of existing code is required** to visualize data structures. Custom classes can be visualized just by letting the library know about their members ([displaying a custom class](#Displaying-a-custom-class)). This means you can also display classes from external libraries that you cannot modify! ([displaying external library classes](#Adapting-existing-classes-from-other-libraries)) 
+- **Simple integration**: the library is header-only, and entirely fits in the `cdv.hpp` header file. Only depends on the standard library.
 
 ## Features and examples
 
+Example :
+```c++
+cdv::visualization<std::string> visualization;
+
+int some_int = 12;
+visualization.add_data_structure(some_int); // Just add the integer !
+
+int* some_int_pointer = &some_int;
+visualization.add_data_structure(some_int_pointer); // Just add the pointer !
+
+int** some_int_pointer_pointer = &some_int_pointer;
+visualization.add_data_structure(some_int_pointer_pointer);
+
+// Create a pair, referencing the two previous pointers.
+const std::pair<int*&, int**&> my_pair{ some_int_pointer, some_int_pointer_pointer };
+visualization.add_data_structure(my_pair);
+
+// Export the visualization as a GraphViz string.
+const std::string my_graphviz_text = cdv::generate_dot_visualization_string(visualization);
+std::cout << my_graphviz_text << std::endl;
+```
+
+This outputs a string in [Graphviz](https://graphviz.org/)'s [Dot language](https://graphviz.org/doc/info/lang.html), which can be pasted in an online visualizer such as [this one](https://dreampuf.github.io/GraphvizOnline/), [this one](https://www.devtoolsdaily.com/graphviz/) or [this one](https://edotor.net/). It is also possible to directly use the `dot` executable provided by Graphviz if it is installed on your machine.
+
+It results in the following image:
+
+![example_1_output](./readme_media/example_1_output.png)
+
+This little example showcases how displaying C++ data structures is always the same with CDV :
+1. Create a `cdv::visualization`. It holds the graph representing the state of your data.
+2. Add all the data structures to display with `add_data_structure`. CDV internally creates a graph of all the C++ data it is able to reach.
+3. Export the visualization to a format suitable for display, by using `cdv::generate_dot_visualization_string`. This function exports the graph using [Graphviz](https://graphviz.org/)'s [Dot language](https://graphviz.org/doc/info/lang.html) 
+
+It also demonstrates several key concepts of CDV:
+- **CDV is recursive**. When an object's members can be reached by CDV, it dives inside and browses all the data inside of it, building the data graph. If you have objects **referencing each others**, CDV detects it. 
+- No matter what you are trying to display, simply call `add_data_structure`. CDV resolves how to browse the data for the type given as a parameter: default type, std container, custom classes, etc.
+- References and pointers are displayed as arrows. By default, references are shown using dashed arrows, and pointers using normal arrows.
+- CDV handles a large number of std containers and utilities (here, `std::pair<T1, T2>`)
+
 ### Displaying containers of the standard library
+The containers of the standard library are supported out of the box by the library. To display a container, simply do:
+```c++
+cdv::visualization<std::string> visualization;
+std::vector<int> my_int_vec;
+my_int_vec.reserve(10);
+for (int i = 0; i < 10; ++i)
+   	my_int_vec.emplace_back(i);
+visualization.add_data_structure(my_int_vec);
+```
 
 ### Displaying a custom class
 
