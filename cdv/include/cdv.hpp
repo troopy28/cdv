@@ -1095,7 +1095,7 @@ namespace cdv
     class visualization;
 
     template<typename string_t>
-    string_t generate_visualization_string(const visualization<string_t>&);
+    string_t generate_dot_visualization_string(const visualization<string_t>&);
 
     template<typename string_t>
     class visualization : public cluster<string_t>
@@ -1533,7 +1533,7 @@ namespace cdv
 
         std::vector<rank_constraint> m_rank_constraints;
 
-        friend string_t generate_visualization_string<string_t>(const visualization<string_t>&);
+        friend string_t generate_dot_visualization_string<string_t>(const visualization<string_t>&);
     };
 
     // ------------------------------------------- graphviz generation ------------------------------------------ //
@@ -1670,7 +1670,7 @@ namespace cdv
     }
 
     template<typename string_t>
-    [[nodiscard]] string_t generate_visualization_string(const visualization<string_t>& visualization)
+    [[nodiscard]] string_t generate_dot_visualization_string(const visualization<string_t>& visualization)
     {
         string_t result;
         result.reserve(50000);
