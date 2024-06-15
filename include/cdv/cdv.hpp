@@ -1852,13 +1852,13 @@ template <typename string_t>
         {                                                                                                              \
             return (MemberNameRetrievalExpression);                                                                    \
         }                                                                                                              \
-        static decltype(auto) get_member_value(const MyClass &instance)                                                \
+        static decltype(auto) get_member_value(const ClassName &instance)                                                \
         {                                                                                                              \
             return instance.MemberValueGetterExpression;                                                               \
         }                                                                                                              \
         static constexpr member_display_type get_member_display_type()                                                 \
         {                                                                                                              \
-            using member_t = decltype(get_member_value(std::declval<MyClass>()));                                      \
+            using member_t = decltype(get_member_value(std::declval<ClassName>()));                                      \
                                                                                                                        \
             if constexpr (std::is_pointer_v<member_t>)                                                                 \
             {                                                                                                          \
@@ -1873,7 +1873,7 @@ template <typename string_t>
                 return member_display_type::inside;                                                                    \
             }                                                                                                          \
         }                                                                                                              \
-        static bool display_member(const MyClass &)                                                                    \
+        static bool display_member(const ClassName &)                                                                    \
         {                                                                                                              \
             return true;                                                                                               \
         }                                                                                                              \
@@ -1890,13 +1890,13 @@ template <typename string_t>
         {                                                                                                              \
             return #MemberName;                                                                                        \
         }                                                                                                              \
-        static decltype(auto) get_member_value(const MyClass &instance)                                                \
+        static decltype(auto) get_member_value(const ClassName &instance)                                              \
         {                                                                                                              \
             return instance.MemberName;                                                                                \
         }                                                                                                              \
         static constexpr member_display_type get_member_display_type()                                                 \
         {                                                                                                              \
-            using member_t = decltype(get_member_value(std::declval<MyClass>()));                                      \
+            using member_t = decltype(get_member_value(std::declval<ClassName>()));                                    \
                                                                                                                        \
             if constexpr (std::is_pointer_v<member_t>)                                                                 \
             {                                                                                                          \
@@ -1911,7 +1911,7 @@ template <typename string_t>
                 return member_display_type::inside;                                                                    \
             }                                                                                                          \
         }                                                                                                              \
-        static bool display_member(const MyClass &)                                                                    \
+        static bool display_member(const ClassName &)                                                                  \
         {                                                                                                              \
             return true;                                                                                               \
         }                                                                                                              \
