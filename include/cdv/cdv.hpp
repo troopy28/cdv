@@ -441,6 +441,7 @@ void remove_class_struct(string_t &str)
 template <typename DataT, typename string_t>
 string_t get_type_name_string()
 {
+    // TODO: this code could probably use a lot of optimizing.
     using char_t = typename string_t::value_type;
     if constexpr (std::is_same_v<char_t, char>)
     {
@@ -922,33 +923,15 @@ enum class member_display_type
 
 namespace traits
 {
-// ---------- contiguous_container ----------
+// ---------- linear_container ----------
 
 template <typename container_t>
-struct contiguous_container : std::false_type
+struct linear_container : std::false_type
 {
 };
 
 template <typename container_t>
-constexpr bool is_contiguous_container_v = contiguous_container<container_t>::value;
-
-// --------- linked_list_container ----------
-
-template <typename container_t>
-struct linked_list_container : std::false_type
-{
-};
-
-template <typename container_t>
-constexpr bool is_linked_list_container_v = linked_list_container<container_t>::value;
-
-template <typename container_t>
-constexpr bool is_singly_linked_list_container_v =
-    linked_list_container<container_t>::value && !linked_list_container<container_t>::doubly_linked;
-
-template <typename container_t>
-constexpr bool is_doubly_linked_list_container_v =
-    linked_list_container<container_t>::value && linked_list_container<container_t>::doubly_linked;
+constexpr bool is_linear_container_v = linear_container<container_t>::value;
 
 // ----------- key_value_container ----------
 
@@ -977,8 +960,7 @@ constexpr bool is_adapted_v =
 // -------------- global checks -------------
 
 template <typename data_t>
-constexpr bool is_container_v =
-    is_contiguous_container_v<data_t> || is_linked_list_container_v<data_t> || is_key_value_container_v<data_t>;
+constexpr bool is_container_v = is_linear_container_v<data_t> || is_key_value_container_v<data_t>;
 
 template <typename data_t>
 constexpr bool is_handled_by_cdv_v = is_container_v<data_t> // TODO: find better name than "is_handled_by_cdv_v"
@@ -995,24 +977,22 @@ namespace traits
 
 // Contiguous storage array-like containers.
 template <typename value_t>
-struct contiguous_container<std::vector<value_t>> : std::true_type
+struct linear_container<std::vector<value_t>> : std::true_type
 {
 };
 template <typename value_t, size_t len>
-struct contiguous_container<std::array<value_t, len>> : std::true_type
+struct linear_container<std::array<value_t, len>> : std::true_type
 {
 };
 
 // Linked-list containers.
 template <typename value_t>
-struct linked_list_container<std::list<value_t>> : std::true_type
+struct linear_container<std::list<value_t>> : std::true_type
 {
-    static constexpr bool doubly_linked{true};
 };
 template <typename value_t>
-struct linked_list_container<std::forward_list<value_t>> : std::true_type
+struct linear_container<std::forward_list<value_t>> : std::true_type
 {
-    static constexpr bool doubly_linked{false};
 };
 
 // Key-Value containers.
@@ -1166,8 +1146,10 @@ uint64_t get_node_id_for_value(const value_t &value)
 template <typename data_t>
 constexpr member_display_type get_data_display_type()
 {
+    using unqualified_data_t = std::remove_const_t<std::remove_reference_t<std::remove_const_t<data_t>>>;
+
     // Pointers => always a pointer arrow.
-    if constexpr (std::is_pointer_v<std::remove_reference_t<data_t>>)
+    if constexpr (std::is_pointer_v<unqualified_data_t>)
     {
         return member_display_type::pointer_edge;
     }
@@ -1176,14 +1158,14 @@ constexpr member_display_type get_data_display_type()
     // - "big" custom classes
     // - etc.
     // => composition edge to avoid gigantic nodes.
-    else if constexpr (traits::is_adapted_v<data_t> || traits::is_container_v<data_t>)
+    else if constexpr (traits::is_adapted_v<unqualified_data_t> || traits::is_container_v<unqualified_data_t>)
     {
         // TODO : see if the class is big or not. If it is big, use a
         // TODO : composition edge. If not, use an "inside" representation.
         return member_display_type::composition_edge;
     }
     // Simple value types can be put inside.
-    else if constexpr (impl::is_value_type<data_t>())
+    else if constexpr (impl::is_value_type<unqualified_data_t>())
     {
         return member_display_type::inside;
     }
@@ -1214,6 +1196,11 @@ class visualization : public cluster<string_t>
     visualization() = default;
 
     // Primitive visualization functions.
+
+    [[nodiscard]] bool has_node(const uint64_t node_id)
+    {
+        return m_nodes.find(node_id) != m_nodes.end();
+    }
 
     template <typename node_t>
     auto add_node(const uint64_t node_id, const node_t &node)
@@ -1263,12 +1250,13 @@ class visualization : public cluster<string_t>
 
     // Advanced automatic data structure visualization functions.
 
-    template <typename contiguous_container_t>
-    uint64_t add_data_structure(const contiguous_container_t &container,
-                                std::enable_if_t<traits::is_contiguous_container_v<contiguous_container_t>, bool> =
-                                    true) // For known contiguous structures.
+    // For known linear containers, ie containers that contain values that can be iterated over,
+    // as opposed to key-value containers that also contain keys.
+    template <typename linear_container_t>
+    uint64_t add_data_structure(const linear_container_t &container,
+                                std::enable_if_t<traits::is_linear_container_v<linear_container_t>, bool> = true)
     {
-        using value_t = typename contiguous_container_t::value_type;
+        using value_t = typename linear_container_t::value_type;
 
         // |--------------------------------------------|
         // | <Type name> | <Address> | Length: <Length> |
@@ -1277,10 +1265,16 @@ class visualization : public cluster<string_t>
         // |--------------------------------------------|
 
         const uint64_t container_node_id = impl::get_node_id_for_value(container);
+        if (has_node(container_node_id))
+        {
+            return container_node_id;
+        }
 
-        auto type_name = impl::get_type_name_string<contiguous_container_t, string_t>();
+        auto type_name = impl::get_type_name_string<linear_container_t, string_t>();
         auto instance_address = impl::get_address_as_string<string_t>(&container);
-        auto length_str = string_t{lit(string_t, "Length: ")} + to_string<string_t>(container.size());
+        // Use std::distance, because some containers don't have a size (std::forward_list is one).
+        const auto length = std::distance(container.cbegin(), container.cend());
+        auto length_str = string_t{lit(string_t, "Length: ")} + to_string<string_t>(length);
         auto container_node = table_node<string_t>{}.with_row(cell_t{std::move(type_name)}.spanning_columns(4),
                                                               cell_t{std::move(instance_address)}.spanning_columns(2),
                                                               cell_t{std::move(length_str)}.spanning_columns(2));
@@ -1355,141 +1349,6 @@ class visualization : public cluster<string_t>
         return container_node_id;
     }
 
-    template <typename linked_list_container>
-    uint64_t add_data_structure(const linked_list_container &container, const bool add_rank_constraints = false,
-                                std::enable_if_t<traits::is_linked_list_container_v<linked_list_container>, bool> =
-                                    true) // For known linked-list-like structures.
-    {
-        using value_t = typename linked_list_container::value_type;
-        constexpr auto header_port_name = lit(string_t, "H");
-        constexpr auto value_address_port_name = lit(string_t, "V");
-
-        // |--------------------------------------------------------|
-        // |--------------------------------------------------------| |            	<Container type name> |  -->  |
-        // <Container type name>              	    |
-        // |--------------------------------------------------------|
-        // |--------------------------------------------------------| | Index: <Index> | <Address of value> | <Value at
-        // index> | 	    | Index: <Index> | <Address of value> | <Value at index> |
-        // |--------------------------------------------------------|
-        // |--------------------------------------------------------|
-
-        const auto container_type_name = impl::get_type_name_string<linked_list_container, string_t>();
-
-        // Special case: empty list.
-        if (container.empty())
-        {
-            auto current_listnode_node =
-                table_node<string_t>{}.with_row(cell_t{container_type_name}).with_row(lit(string_t, "Empty list"));
-            const auto node_id =
-                impl::hash_combine(impl::get_node_id_for_value(container), std::numeric_limits<uint64_t>::max());
-            add_node(node_id, std::move(current_listnode_node));
-            return node_id;
-        }
-
-        // value_t is a value type: put the value directly in the cell of each listnode.
-        std::vector<uint64_t> inserted_node_ids{};
-        inserted_node_ids.reserve(128);
-        if constexpr (impl::is_value_type<value_t>())
-        {
-            for (const auto &value : container)
-            {
-                // Add a node for the current value.
-                auto index_str = string_t{lit(string_t, "Index: ")} + to_string<string_t>(inserted_node_ids.size());
-                auto value_address = impl::get_address_as_string<string_t>(&value);
-                auto current_listnode_node =
-                    table_node<string_t>{}
-                        .with_row(cell_t{container_type_name}.spanning_columns(2).with_port(header_port_name))
-                        .with_row(std::move(index_str), std::move(value_address))
-                        .with_row(cell_t{std::move(cdv::to_string<string_t>(value))}.spanning_columns(2));
-                const auto node_id = impl::hash_combine(impl::get_node_id_for_value(value), inserted_node_ids.size());
-                add_node(node_id, std::move(current_listnode_node));
-
-                // If not the first value, connect the previous node to the new node.
-                if (!inserted_node_ids.empty())
-                {
-                    add_edge(arrow<string_t>{inserted_node_ids[inserted_node_ids.size() - 1], header_port_name, node_id,
-                                             lit(string_t, "")});
-                    // If the container is a doubly linked list, add a backward edge.
-                    if constexpr (traits::is_doubly_linked_list_container_v<linked_list_container>)
-                    {
-                        add_edge(arrow<string_t>{node_id, header_port_name,
-                                                 inserted_node_ids[inserted_node_ids.size() - 1], lit(string_t, "")});
-                    }
-                }
-                inserted_node_ids.emplace_back(node_id);
-            }
-        }
-        // value_t is a pointer type:
-        // - put the ADDRESS in each cell,
-        // - add a node for each pointed value,
-        // - add an edge to each node
-        else if constexpr (std::is_pointer_v<value_t>)
-        {
-            for (const auto &value : container)
-            {
-                // Add a node for the current value.
-                auto index_str = string_t{lit(string_t, "Index: ")} + to_string<string_t>(inserted_node_ids.size());
-                auto value_address = impl::get_address_as_string<string_t>(
-                    &value); // This is the address OF THE POINTER (stuff**, not stuff*).
-                auto current_listnode_node =
-                    table_node<string_t>{}
-                        .with_row(cell_t{container_type_name}.spanning_columns(2).with_port(header_port_name))
-                        .with_row(std::move(index_str), std::move(value_address))
-                        .with_row(cell_t{impl::get_address_as_string<string_t>(value)}.spanning_columns(2).with_port(
-                            value_address_port_name));
-                const auto node_id = impl::hash_combine(impl::get_node_id_for_value(value), inserted_node_ids.size());
-                add_node(node_id, std::move(current_listnode_node));
-
-                // Node for the value.
-                const uint64_t pointed_node_id = add_data_structure(*value);
-                // Edge from the cell to the value.
-                add_edge(arrow<string_t>{node_id, value_address_port_name, pointed_node_id, lit(string_t, "")});
-
-                // If not the first value, connect the previous node to the new node.
-                if (!inserted_node_ids.empty())
-                {
-                    add_edge(arrow<string_t>{inserted_node_ids[inserted_node_ids.size() - 1], header_port_name, node_id,
-                                             header_port_name});
-                    // If the container is a doubly linked list, add a backward edge.
-                    if constexpr (traits::is_doubly_linked_list_container_v<linked_list_container>)
-                    {
-                        add_edge(arrow<string_t>{node_id, header_port_name,
-                                                 inserted_node_ids[inserted_node_ids.size() - 1], header_port_name});
-                    }
-                }
-                inserted_node_ids.emplace_back(node_id);
-            }
-        }
-        // todo std::reference_wrapper
-
-        if (add_rank_constraints)
-        {
-            // If asked: rank constraints!
-            // All nodes of the list should have the same rank, more or less:
-            // every pack of 5 nodes is asked to have the same rank.
-            constexpr int initially_requested_rank = 1;
-            constexpr int max_nodes_per_rank = 5;
-            rank_constraint current_constraint{{}, initially_requested_rank};
-            for (uint64_t node_id : inserted_node_ids)
-            {
-                current_constraint.constrained_node_ids.emplace_back(node_id);
-                if (current_constraint.constrained_node_ids.size() > max_nodes_per_rank)
-                {
-                    const int previous_rank = current_constraint.requested_rank;
-                    add_rank_constraint(std::move(current_constraint));
-                    current_constraint = rank_constraint{{}, previous_rank + 1};
-                }
-            }
-            if (!current_constraint.constrained_node_ids.empty())
-            {
-                // Add the last constraint if not empty.
-                add_rank_constraint(std::move(current_constraint));
-            }
-        }
-
-        return inserted_node_ids[0];
-    }
-
     template <typename adapted_class_t, size_t member_index>
     void add_rows_for_members(const adapted_class_t &data_structure, const uint64_t instance_node_id,
                               table_node<string_t> &node_for_data_structure)
@@ -1554,13 +1413,10 @@ class visualization : public cluster<string_t>
         }
     }
 
-    // std::string pas géré ... faut se débrouiller pour avoir un add_data_structure qui fasse un to_string quand
-    // rien d'autre ne marche
-
+    // For custom user types.
     template <typename adapted_class_t>
-    uint64_t add_data_structure(
-        const adapted_class_t &data_structure,
-        std::enable_if_t<traits::is_adapted_v<adapted_class_t>, bool> = true) // For custom user types.
+    uint64_t add_data_structure(const adapted_class_t &data_structure,
+                                std::enable_if_t<traits::is_adapted_v<adapted_class_t>, bool> = true)
     {
         // Add a table node referencing all adapted members :
 
@@ -1575,9 +1431,13 @@ class visualization : public cluster<string_t>
         // |-------------------------------------|
 
         const uint64_t node_id = impl::get_node_id_for_value(data_structure);
+        if (has_node(node_id))
+        {
+            return node_id;
+        }
+
         auto type_name = impl::get_type_name_string<adapted_class_t, string_t>();
         auto instance_address = impl::get_address_as_string<string_t>(&data_structure);
-
         // Base node with heading row.
         auto node_for_instance = table_node<string_t>{}.with_row(std::move(type_name), std::move(instance_address));
 
@@ -1587,10 +1447,10 @@ class visualization : public cluster<string_t>
         return node_id;
     }
 
+    // For simple types.
     template <typename simple_type_t>
-    uint64_t add_data_structure(
-        const simple_type_t &data_structure,
-        std::enable_if_t<impl::is_simple_type_v<simple_type_t>, bool> = true) // For simple types.
+    uint64_t add_data_structure(const simple_type_t &data_structure,
+                                std::enable_if_t<impl::is_simple_type_v<simple_type_t>, bool> = true)
     {
         // Add a simple table node:
 
@@ -1601,6 +1461,11 @@ class visualization : public cluster<string_t>
         // |-------------------------|
 
         const uint64_t node_id = impl::get_node_id_for_value(data_structure);
+        if (has_node(node_id))
+        {
+            return node_id;
+        }
+
         auto type_name = impl::get_type_name_string<simple_type_t, string_t>();
         auto instance_address = impl::get_address_as_string<string_t>(&data_structure);
         auto node_for_instance = table_node<string_t>{}
@@ -1610,9 +1475,10 @@ class visualization : public cluster<string_t>
         return node_id;
     }
 
+    // For raw pointers.
     template <typename pointer_type_t>
     uint64_t add_data_structure(const pointer_type_t &data_structure,
-                                std::enable_if_t<std::is_pointer_v<pointer_type_t>, bool> = true) // For raw pointers.
+                                std::enable_if_t<std::is_pointer_v<pointer_type_t>, bool> = true)
     {
         // First add a node for the pointed value (recursion).
         const uint64_t pointed_value_node_id = add_data_structure(*data_structure);
@@ -1625,6 +1491,11 @@ class visualization : public cluster<string_t>
         // |---------------------------|
         string_t ptr_port_name{lit(string_t, "ptr")};
         const uint64_t pointer_node_id = impl::get_node_id_for_value(data_structure);
+        if (has_node(pointer_node_id))
+        {
+            return pointer_node_id;
+        }
+
         auto pointer_type_name = impl::get_type_name_string<pointer_type_t, string_t>();
         auto address_of_pointer = impl::get_address_as_string<string_t>(&data_structure);
         auto node_for_pointer =
@@ -1641,10 +1512,10 @@ class visualization : public cluster<string_t>
         return pointer_node_id;
     }
 
+    // Special case for C-style strings.
     template <typename cstring_type>
-    uint64_t add_data_structure(
-        const cstring_type &data_structure,
-        std::enable_if_t<impl::is_cstring_type_v<cstring_type>, bool> = true) // Special case for C-style strings.
+    uint64_t add_data_structure(const cstring_type &data_structure,
+                                std::enable_if_t<impl::is_cstring_type_v<cstring_type>, bool> = true)
     {
         // Add a simple table node:
 
@@ -1655,6 +1526,11 @@ class visualization : public cluster<string_t>
         // |-------------------------|
 
         const uint64_t node_id = impl::get_node_id_for_value(data_structure);
+        if (has_node(node_id))
+        {
+            return node_id;
+        }
+
         auto type_name = impl::get_type_name_string<cstring_type, string_t>();
         auto instance_address = impl::get_address_as_string<string_t>(&data_structure);
         auto node_for_instance = table_node<string_t>{}
@@ -1962,7 +1838,8 @@ template <typename string_t>
         {                                                                                                              \
             return #MemberName;                                                                                        \
         }                                                                                                              \
-        static decltype(auto) get_member_value(const ClassName &instance)                                              \
+        static auto get_member_value(const ClassName &instance)                                                        \
+            -> std::add_lvalue_reference_t<std::add_const_t<decltype(instance.MemberName)>>                            \
         {                                                                                                              \
             return instance.MemberName;                                                                                \
         }                                                                                                              \

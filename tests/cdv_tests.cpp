@@ -40,6 +40,17 @@ CDV_DECLARE_PUBLIC_MEMBER(Position, 0, x)
 CDV_DECLARE_PUBLIC_MEMBER(Position, 1, y)
 CDV_DECLARE_PUBLIC_MEMBER(Position, 2, z)
 
+struct NodeGraph
+{
+    explicit NodeGraph(std::string _name)
+        : name{std::move(_name)}
+    {
+    }
+    std::string name;
+    std::vector<NodeGraph *> nodes{};
+};
+CDV_DECLARE_PUBLIC_MEMBER(NodeGraph, 0, name)
+CDV_DECLARE_PUBLIC_MEMBER(NodeGraph, 1, nodes)
 
 void example_1()
 {
@@ -91,6 +102,44 @@ void example_3_vector_of_struct()
         positions.emplace_back(Position{i, (i + 5) % 2, (i * 3) % 4});
     }
     visualization.add_data_structure(positions);
+
+    std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
+}
+
+void example_4_user_defined_graph()
+{
+    cdv::visualization<std::string> visualization;
+
+    NodeGraph start{"start"}, level1_node1{"level1_node1"}, level1_node2{"level1_node2"}, level2_node1{"level2_node1"},
+        level3_node1{"level3_node1"}, level4_node1{"level4_node1"}, level4_node2{"level4_node2"}, end{"end"};
+    //               start
+    //              /     \
+    //  level1_node1      level1_node2
+    //      |            /     |
+    //  level2_node1    /      |
+    //      |          /       |
+    //  level3_node1--/        |
+    //      |                  |
+    //  level4_node1        level4_node2
+    //              \      /
+    //                end
+
+    // Root level.
+    start.nodes.emplace_back(&level1_node1);
+    start.nodes.emplace_back(&level1_node2);
+    // Level 1.
+    level1_node1.nodes.emplace_back(&level2_node1);
+    // level1_node2.nodes.emplace_back(&level3_node1);
+    // level1_node2.nodes.emplace_back(&level4_node2);
+    // Level 2.
+    // level2_node1.nodes.emplace_back(&level3_node1);
+    // Level 3.
+    // level3_node1.nodes.emplace_back(&level4_node1);
+    // Level 4.
+    // level4_node1.nodes.emplace_back(&end);
+    // level4_node2.nodes.emplace_back(&end);
+
+    visualization.add_data_structure(start);
 
     std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
 }
@@ -191,7 +240,9 @@ void big_example()
 
 int main()
 {
-    example_1();
+    // example_1();
     // example_2_optional();
+    // example_3_vector_of_struct();
+    example_4_user_defined_graph();
     return 0;
 }
