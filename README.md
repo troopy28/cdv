@@ -167,8 +167,6 @@ Template classes require a little more work to adapt, because no macros are prov
 
 This example shows how to adapt the **template class** `std::pair<T1, T2>`, meaning the adapter will work with any `T1` and `T2`. Note that this is directly how the library adapts `std::pair<T1, T2>`, the code can be found in the library's source code.
 
-
-
 ### Fully custom graphs
 
 ## Supported compilers

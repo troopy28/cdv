@@ -1155,6 +1155,37 @@ uint64_t get_node_id_for_value(const value_t &value)
     // TODO: check if value_t has a custom node ID computation function.
     return get_address_as_uint<value_t>(&value);
 }
+
+/**
+ * \tparam data_t Data type to represent.
+ * \return If 'data_t' is a pointer type, this function is required to return a pointer arrow. Calling code
+ * can safely dereference any pointer corresponding to this.
+ * If not, if the class is adapted, this is left to the class's discretion. If it is not adapted, it falls
+ * back to the 'inside' representation, and an attempt to call cdv::to_string on the value will be made.
+ */
+template <typename data_t>
+constexpr member_display_type get_data_display_type()
+{
+    if constexpr (std::is_pointer_v<std::remove_reference_t<data_t>>)
+    {
+        return member_display_type::pointer_edge;
+    }
+    else if constexpr (traits::is_adapted_v<data_t>)
+    {
+        // TODO : see if the class is big or not. If it is big, use a
+        // TODO : composition edge. If not, use an "inside" representation.
+        return member_display_type::composition_edge;
+    }
+    else if constexpr (impl::is_value_type<data_t>())
+    {
+        return member_display_type::inside;
+    }
+    else
+    {
+        return member_display_type::inside;
+    }
+}
+
 } // namespace impl
 
 // ---------------------------------------------- visualization --------------------------------------------- //
@@ -1246,8 +1277,10 @@ class visualization : public cluster<string_t>
                                                               cell_t{std::move(instance_address)}.spanning_columns(2),
                                                               cell_t{std::move(length_str)}.spanning_columns(2));
 
-        // value_t is a value type: put the value directly in each cell.
-        if constexpr (impl::is_value_type<value_t>())
+        constexpr member_display_type data_display_type = impl::get_data_display_type<value_t>();
+
+        // Put the value directly in each cell.
+        if constexpr (data_display_type == member_display_type::inside)
         {
             auto values_row = typename table_node<string_t>::row{};
             values_row.cells.emplace_back(lit(string_t, "Values: "));
@@ -1261,7 +1294,7 @@ class visualization : public cluster<string_t>
         // - put the ADDRESS in each cell,
         // - add a node for each pointed value,
         // - add an edge to each node
-        else if constexpr (std::is_pointer_v<value_t>)
+        else if constexpr (data_display_type == member_display_type::pointer_edge)
         {
             auto values_row = typename table_node<string_t>::row{};
             values_row.cells.emplace_back(lit(string_t, "Values: "));
@@ -1282,6 +1315,32 @@ class visualization : public cluster<string_t>
             }
             container_node.add_row(values_row);
         }
+        // value_t is an adapted type:
+        // - put the INDEX in each cell,
+        // - add a node for each value,
+        // - add an edge to each node
+        else if constexpr (data_display_type == member_display_type::composition_edge)
+        {
+            auto values_row = typename table_node<string_t>::row{};
+            values_row.cells.emplace_back(lit(string_t, "Values: "));
+            size_t index = 0;
+            for (const auto &value : container)
+            {
+                // Index in the vector node.
+                const auto port_name = cdv::to_string<string_t>(index);
+                values_row.cells.emplace_back(cell_t{cdv::to_string<string_t>(index)}.with_port(port_name));
+
+                // Node for the value.
+                const uint64_t contained_node_id = add_data_structure(value);
+
+                // Edge from the cell to the value.
+                add_edge(arrow<string_t>{container_node_id, port_name, contained_node_id, lit(string_t, "")}.with_style(
+                    edge_style::dashed));
+                ++index;
+            }
+            container_node.add_row(values_row);
+        }
+
         // todo std::reference_wrapper
 
         add_node(container_node_id, std::move(container_node));
@@ -1437,13 +1496,18 @@ class visualization : public cluster<string_t>
         {
             auto member_name = indexed_member_access_t::get_member_name();
             const auto &member_value = indexed_member_access_t::get_member_value(data_structure);
-            constexpr member_display_type member_display_method = indexed_member_access_t::get_member_display_type();
-            if constexpr (member_display_method == member_display_type::inside ||
-                          member_display_method == member_display_type::composition_edge)
+            constexpr member_display_type data_display_type =
+                impl::get_data_display_type<decltype(indexed_member_access_t::get_member_value(data_structure))>();
+
+            if constexpr (data_display_type == member_display_type::inside)
             {
-                // TODO add_rows_for_members | For now, 'inside' is unsupported. Work needed to properly support it,
-                // TODO add_rows_for_members | will be the goal of a future commit.
-                // Address in the vector node.
+                const auto port_name = cdv::to_string<string_t>(member_index);
+                node_for_data_structure.add_row(std::move(member_name),
+                                                cell_t{cdv::to_string<string_t>(member_value)}.with_port(port_name));
+            }
+            else if constexpr (data_display_type == member_display_type::composition_edge)
+            {
+                // Address in the instance table.
                 const auto port_name = cdv::to_string<string_t>(member_index);
                 node_for_data_structure.add_row(
                     std::move(member_name),
@@ -1459,11 +1523,11 @@ class visualization : public cluster<string_t>
             }
             else // member_display_method == member_display_type::pointer_edge
             {
-                // Address in the vector node.
+                // Address in the instance table.
                 const auto port_name = cdv::to_string<string_t>(member_index);
                 node_for_data_structure.add_row(
                     std::move(member_name),
-                    cell_t{impl::get_address_as_string<string_t>(&member_value)}.with_port(port_name));
+                    cell_t{impl::get_address_as_string<string_t>(member_value)}.with_port(port_name));
 
                 // Node for the value.
                 const uint64_t pointed_node_id = add_data_structure(*member_value);
@@ -1852,13 +1916,13 @@ template <typename string_t>
         {                                                                                                              \
             return (MemberNameRetrievalExpression);                                                                    \
         }                                                                                                              \
-        static decltype(auto) get_member_value(const ClassName &instance)                                                \
+        static decltype(auto) get_member_value(const ClassName &instance)                                              \
         {                                                                                                              \
             return instance.MemberValueGetterExpression;                                                               \
         }                                                                                                              \
         static constexpr member_display_type get_member_display_type()                                                 \
         {                                                                                                              \
-            using member_t = decltype(get_member_value(std::declval<ClassName>()));                                      \
+            using member_t = decltype(get_member_value(std::declval<ClassName>()));                                    \
                                                                                                                        \
             if constexpr (std::is_pointer_v<member_t>)                                                                 \
             {                                                                                                          \
@@ -1873,7 +1937,7 @@ template <typename string_t>
                 return member_display_type::inside;                                                                    \
             }                                                                                                          \
         }                                                                                                              \
-        static bool display_member(const ClassName &)                                                                    \
+        static bool display_member(const ClassName &)                                                                  \
         {                                                                                                              \
             return true;                                                                                               \
         }                                                                                                              \

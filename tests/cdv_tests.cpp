@@ -25,11 +25,21 @@ class MyClass
     int my_int{24};
     double my_double{3.14};
 };
-
 CDV_DECLARE_PUBLIC_MEMBER(MyClass, 0, MyPublicMember)
 CDV_DECLARE_MEMBER(MyClass, 1, "my_string", get_string())
 CDV_DECLARE_MEMBER(MyClass, 2, "my_int", get_int())
 CDV_DECLARE_MEMBER(MyClass, 3, "my_double", get_double())
+
+struct Position
+{
+    int x{0};
+    int y{0};
+    int z{0};
+};
+CDV_DECLARE_PUBLIC_MEMBER(Position, 0, x)
+CDV_DECLARE_PUBLIC_MEMBER(Position, 1, y)
+CDV_DECLARE_PUBLIC_MEMBER(Position, 2, z)
+
 
 void example_1()
 {
@@ -52,22 +62,37 @@ void example_1()
 
     // Export the visualization as a GraphViz string.
     const std::string my_graphviz_text = cdv::generate_dot_visualization_string(visualization);
-    std::cout << my_graphviz_text << std::endl;
+    std::cout << my_graphviz_text << "\n";
 }
 
 void example_2_optional()
 {
     cdv::visualization<std::string> visualization;
 
-    std::optional<int *> empty_optional = std::nullopt;
+    const std::optional<int *> empty_optional = std::nullopt;
     visualization.add_data_structure(empty_optional);
 
     int my_int = 3;
     int *my_int_ptr = &my_int;
-    std::optional<int *> valued_optional = my_int_ptr;
+    const std::optional<int *> valued_optional = my_int_ptr;
     visualization.add_data_structure(valued_optional);
 
-    std::cout << cdv::generate_dot_visualization_string(visualization) << std::endl;
+    std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
+}
+
+void example_3_vector_of_struct()
+{
+    cdv::visualization<std::string> visualization;
+
+    std::vector<Position> positions;
+    positions.reserve(5);
+    for (int i = 0; i < 5; ++i)
+    {
+        positions.emplace_back(Position{i, (i + 5) % 2, (i * 3) % 4});
+    }
+    visualization.add_data_structure(positions);
+
+    std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
 }
 
 void big_example()
@@ -166,6 +191,7 @@ void big_example()
 
 int main()
 {
-    example_2_optional();
+    example_1();
+    // example_2_optional();
     return 0;
 }
