@@ -1166,20 +1166,28 @@ uint64_t get_node_id_for_value(const value_t &value)
 template <typename data_t>
 constexpr member_display_type get_data_display_type()
 {
+    // Pointers => always a pointer arrow.
     if constexpr (std::is_pointer_v<std::remove_reference_t<data_t>>)
     {
         return member_display_type::pointer_edge;
     }
-    else if constexpr (traits::is_adapted_v<data_t>)
+    // "Big" objects:
+    // - containers
+    // - "big" custom classes
+    // - etc.
+    // => composition edge to avoid gigantic nodes.
+    else if constexpr (traits::is_adapted_v<data_t> || traits::is_container_v<data_t>)
     {
         // TODO : see if the class is big or not. If it is big, use a
         // TODO : composition edge. If not, use an "inside" representation.
         return member_display_type::composition_edge;
     }
+    // Simple value types can be put inside.
     else if constexpr (impl::is_value_type<data_t>())
     {
         return member_display_type::inside;
     }
+    // By default, try putting stuff inside.
     else
     {
         return member_display_type::inside;
