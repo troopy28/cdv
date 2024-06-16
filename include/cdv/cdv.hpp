@@ -706,7 +706,8 @@ class table
     {
         // Add a row and build it.
         m_rows.emplace_back();
-        // TODO optim: set row capacity from the parameter pack's size + 1
+        // Set row capacity from the parameter pack's size + 1
+        m_rows[m_rows.size() - 1].cells.reserve(sizeof...(Ts) + 1);
         m_rows[m_rows.size() - 1].template build<T1, Ts...>(std::forward<T1>(first_cell_value),
                                                             std::forward<Ts>(other_cell_values)...);
     }
