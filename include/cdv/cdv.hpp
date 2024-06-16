@@ -1384,7 +1384,7 @@ class visualization : public cluster<string_t>
     }
 
     template <typename adapted_class_t, size_t member_index>
-    void add_rows_for_members(const adapted_class_t &data_structure, const uint64_t instance_node_id,
+    void add_rows_for_members(const adapted_class_t &data_structure, [[maybe_unused]] const uint64_t instance_node_id,
                               table_node<string_t> &node_for_data_structure)
     {
         // indexed_member_access_t::get_member_name()  : unit -> string_t

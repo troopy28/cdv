@@ -127,17 +127,17 @@ void example_4_user_defined_graph()
 
     NodeGraph start{"start"}, level1_node1{"level1_node1"}, level1_node2{"level1_node2"}, level2_node1{"level2_node1"},
         level3_node1{"level3_node1"}, level4_node1{"level4_node1"}, level4_node2{"level4_node2"}, end{"end"};
-    //               start
-    //              /     \
-    //  level1_node1      level1_node2
-    //      |            /     |
-    //  level2_node1    /      |
-    //      |          /       |
-    //  level3_node1--/        |
-    //      |                  |
-    //  level4_node1        level4_node2
-    //              \      /
-    //                end
+    //               start                       |
+    //              /     \                      |
+    //  level1_node1      level1_node2           |
+    //      |            /     |                 |
+    //  level2_node1    /      |                 |
+    //      |          /       |                 |
+    //  level3_node1--/        |                 |
+    //      |                  |                 |
+    //  level4_node1        level4_node2         |
+    //              \      /                     |
+    //                end                        |
 
     // Root level.
     start.nodes.emplace_back(&level1_node1);
@@ -181,11 +181,11 @@ void example_6_user_defined_tree()
 
     TreeNode root{"root"};
 
-    //              root
-    //             /    \
-    //            a      b
-    //           / \    / \
-    //          c   d  e   f
+    //              root              |
+    //             /    \             |
+    //            a      b            |
+    //           / \    / \           |
+    //          c   d  e   f          |
 
     root.left = std::make_unique<TreeNode>("a");
     root.right = std::make_unique<TreeNode>("b");
@@ -203,7 +203,6 @@ void example_6_user_defined_tree()
 void big_example()
 {
     using cell = cdv::table_node<std::string>::cell;
-    using arrow = cdv::arrow<std::string>;
 
     cdv::visualization<std::string> my_viz; // Un vecteur de valeurs.
 
