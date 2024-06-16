@@ -13,17 +13,34 @@ Header-only C++ 17 library providing runtime data structure visualization capabi
 > [!CAUTION]
 > **This library is currently in heavy development** and no API is entirely stable yet. Many features that are part of the library design goals are still missing and are being worked on.
 
+- [Design goals](#design-goals)
+- [Features and examples](#features-and-examples)
+  - [Displaying containers of the standard library](#displaying-containers-of-the-standard-library)
+  - [Displaying a custom class](#displaying-a-custom-class)
+    - [Declaring a public member](#declaring-a-public-member)
+    - [Declaring a member](#declaring-a-member)
+    - [Declaring a custom member](#declaring-a-custom-member)
+  - [Adapting existing classes from other libraries](#adapting-existing-classes-from-other-libraries)
+  - [Adapting a template class](#adapting-a-template-class)
+  - [Fully custom graphs](#fully-custom-graphs)
+  - [Supported compilers](#supported-compilers)
+  - [CMake integration](#cmake-integration)
+  - [License](#license)
+  - [Contact](#contact)
+  - [Notes](#notes)
+
 ## Design goals
 
 There already are some C++ data structure visualization libraries out there. This one attempts to tick the following boxes:
 
-- **Seamless standard library support**: printing a hierarchy of std containers, such as a `std::vector<std::vector<int*>>`, is a simple function call ([displaying containers of the standard library](#displaying-containers-of-the-standard-library)). 
-- **Flexible**: the non-intrusive adapter-based approach of this library means no **modification of existing code is required** to visualize data structures. Custom classes can be visualized just by letting the library know about their members ([displaying a custom class](#displaying-a-custom-class)). This means you can also display classes from external libraries that you cannot modify! ([displaying external library classes](#adapting-existing-classes-from-other-libraries)) 
+- **Seamless standard library support**: printing a hierarchy of std containers, such as a `std::vector<std::vector<int*>>`, is a simple function call ([displaying containers of the standard library](#displaying-containers-of-the-standard-library)).
+- **Flexible**: the non-intrusive adapter-based approach of this library means no **modification of existing code is required** to visualize data structures. Custom classes can be visualized just by letting the library know about their members ([displaying a custom class](#displaying-a-custom-class)). This means you can also display classes from external libraries that you cannot modify! ([displaying external library classes](#adapting-existing-classes-from-other-libraries))
 - **Simple integration**: the library is header-only, and entirely fits in the `cdv.hpp` header file. Only depends on the standard library.
 
 ## Features and examples
 
 Example :
+
 ```c++
 cdv::visualization<std::string> visualization;
 
@@ -55,11 +72,11 @@ This little example showcases how displaying C++ data structures is always the s
 
 1. Create a `cdv::visualization`. It holds the graph representing the state of your data.
 2. Add all the data structures to display with `add_data_structure`. CDV internally creates a graph of all the C++ data it is able to reach.
-3. Export the visualization to a format suitable for display, by using `cdv::generate_dot_visualization_string`. This function exports the graph using [Graphviz](https://graphviz.org/)'s [Dot language](https://graphviz.org/doc/info/lang.html) 
+3. Export the visualization to a format suitable for display, by using `cdv::generate_dot_visualization_string`. This function exports the graph using [Graphviz](https://graphviz.org/)'s [Dot language](https://graphviz.org/doc/info/lang.html)
 
 It also demonstrates several key concepts of CDV:
 
-- **CDV is recursive**. When an object's members can be reached by CDV, it dives inside and browses all the data inside of it, building the data graph. If you have objects **referencing each others**, CDV detects it. 
+- **CDV is recursive**. When an object's members can be reached by CDV, it dives inside and browses all the data inside of it, building the data graph. If you have objects **referencing each others**, CDV detects it.
 - No matter what you are trying to display, simply call `add_data_structure`. CDV resolves how to browse the data for the type given as a parameter: default type, std container, custom classes, etc.
 - References and pointers are displayed as arrows. By default, references are shown using dashed arrows, and pointers using normal arrows.
 - CDV handles a large number of std containers and utilities (here, `std::pair<T1, T2>`).
@@ -67,6 +84,7 @@ It also demonstrates several key concepts of CDV:
 ### Displaying containers of the standard library
 
 The containers of the standard library are supported out of the box by the library. To display a container, simply do:
+
 ```c++
 cdv::visualization<std::string> visualization;
 std::vector<int> my_int_vec;
@@ -78,7 +96,8 @@ visualization.add_data_structure(my_int_vec);
 
 ### Displaying a custom class
 
-Custom classes are displayed by declaring their members to the library. This is done using three macros:  `CDV_DECLARE_MEMBER`, `CDV_DECLARE_PUBLIC_MEMBER` and `CDV_DECLARE_CUSTOM_MEMBER`. The following class is used as an example: 
+Custom classes are displayed by declaring their members to the library. This is done using three macros:  `CDV_DECLARE_MEMBER`, `CDV_DECLARE_PUBLIC_MEMBER` and `CDV_DECLARE_CUSTOM_MEMBER`. The following class is used as an example:
+
 ```c++
 class MyClass
 {
@@ -110,9 +129,11 @@ private:
 #### Declaring a public member
 
 To declare a public member (here `MyPublicMember`), simply use:
+
 ```c++
 CDV_DECLARE_PUBLIC_MEMBER(MyClass, 0, MyPublicMember)
 ```
+
 The first argument of the macro is always the type owning the member. The second argument is the index of the member. The third argument is the name of the public member. It must be publicly accessible.
 
 > [!WARNING]  
@@ -121,15 +142,17 @@ The first argument of the macro is always the type owning the member. The second
 #### Declaring a member
 
 Class members are usually private. If a member has a public getter, it is very easy to declare it using the `CDV_DECLARE_MEMBER` macro. For instance, to declare the members `my_string`, `my_int`, and `my_double`, the following lines are used:
+
 ```c++
 CDV_DECLARE_MEMBER(MyClass, 1, "my_string", get_string())
 CDV_DECLARE_MEMBER(MyClass, 2, "my_int", get_int())
 CDV_DECLARE_MEMBER(MyClass, 3, "my_double", get_double())
 ```
+
 The main difference with the previous macro is that the getter method providing access to the member is specified in the last argument:
 
 - The first argument of the macro is, again, the type owning the member.
-- The second argument is, again, the index of the member. 
+- The second argument is, again, the index of the member.
 - The third argument is the name *you want to use to display the value obtained through the getter method*. It differs from the previous macro, where it was directly the C++ name of the member.
 - The last argument is the name of the getter method. It must be publicly accessible, and marked as `const`.
 
@@ -157,7 +180,7 @@ TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
 ```
 
 > [!CAUTION]
-> When using this member declaration method to work around a getter not being marked as `const`, make sure that the member does not modify the instance's content (that is: it really *should* be marked as `const`, but you cannot change it for reasons). If the getter modifies the displayed instance's internal state, then using this library as a debugging tool is meaningless and absurd, since it will display potentially incorrect data and alter the state of your program. 
+> When using this member declaration method to work around a getter not being marked as `const`, make sure that the member does not modify the instance's content (that is: it really *should* be marked as `const`, but you cannot change it for reasons). If the getter modifies the displayed instance's internal state, then using this library as a debugging tool is meaningless and absurd, since it will display potentially incorrect data and alter the state of your program.
 
 ### Adapting existing classes from other libraries
 
@@ -167,14 +190,53 @@ Template classes require a little more work to adapt, because no macros are prov
 
 This example shows how to adapt the **template class** `std::pair<T1, T2>`, meaning the adapter will work with any `T1` and `T2`. Note that this is directly how the library adapts `std::pair<T1, T2>`, the code can be found in the library's source code.
 
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO TODO
+
 ### Fully custom graphs
 
 ## Supported compilers
+
+The following compilers are known to be supported:
+
+- MSVC x64, [TODO : FIND VERSIONS]
+- Clang x86-64, from 11.0.0 to 18.1.0 (and possibly newer).
+- GCC x86-64, from 7.1 to 14.1 (and possibly newer).
 
 ## CMake integration
 
 ## License
 
+Boost Software License - Version 1.0 - August 17th, 2003
+
+Permission is hereby granted, free of charge, to any person or organization
+obtaining a copy of the software and accompanying documentation covered by
+this license (the "Software") to use, reproduce, display, distribute,
+execute, and transmit the Software, and to prepare derivative works of the
+Software, and to permit third-parties to whom the Software is furnished to
+do so, all subject to the following:
+
+The copyright notices in the Software and this entire statement, including
+the above license grant, this restriction and the following disclaimer,
+must be included in all copies of the Software, in whole or in part, and
+all derivative works of the Software, unless such copies or derivative
+works are solely in the form of machine-executable object code generated by
+a source language processor.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, TITLE AND NON-INFRINGEMENT. IN NO EVENT
+SHALL THE COPYRIGHT HOLDERS OR ANYONE DISTRIBUTING THE SOFTWARE BE LIABLE
+FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
+ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+DEALINGS IN THE SOFTWARE.
+
 ## Contact
+
+Questions regarding the CDV library should be submitted as a [github issue](https://github.com/troopy28/cdv/issues/new/choose).
 
 ## Notes
