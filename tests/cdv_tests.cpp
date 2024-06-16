@@ -52,6 +52,21 @@ struct NodeGraph
 CDV_DECLARE_PUBLIC_MEMBER(NodeGraph, 0, name)
 CDV_DECLARE_PUBLIC_MEMBER(NodeGraph, 1, nodes)
 
+struct TreeNode
+{
+    explicit TreeNode(std::string _name)
+        : name{std::move(_name)}
+    {
+    }
+    std::string name;
+    std::unique_ptr<TreeNode> left;
+    std::unique_ptr<TreeNode> right;
+};
+CDV_DECLARE_PUBLIC_MEMBER(TreeNode, 0, name)
+CDV_DECLARE_PUBLIC_MEMBER(TreeNode, 1, left)
+CDV_DECLARE_PUBLIC_MEMBER(TreeNode, 2, right)
+
+
 void example_1()
 {
     // A visualization object browses your data and builds the graph
@@ -129,20 +144,61 @@ void example_4_user_defined_graph()
     start.nodes.emplace_back(&level1_node2);
     // Level 1.
     level1_node1.nodes.emplace_back(&level2_node1);
-    // level1_node2.nodes.emplace_back(&level3_node1);
-    // level1_node2.nodes.emplace_back(&level4_node2);
+    level1_node2.nodes.emplace_back(&level3_node1);
+    level1_node2.nodes.emplace_back(&level4_node2);
     // Level 2.
-    // level2_node1.nodes.emplace_back(&level3_node1);
+    level2_node1.nodes.emplace_back(&level3_node1);
     // Level 3.
-    // level3_node1.nodes.emplace_back(&level4_node1);
+    level3_node1.nodes.emplace_back(&level4_node1);
     // Level 4.
-    // level4_node1.nodes.emplace_back(&end);
-    // level4_node2.nodes.emplace_back(&end);
+    level4_node1.nodes.emplace_back(&end);
+    level4_node2.nodes.emplace_back(&end);
 
     visualization.add_data_structure(start);
 
     std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
 }
+
+void example_5_nullptr()
+{
+    cdv::visualization<std::string> visualization;
+
+    visualization.add_data_structure(nullptr);
+
+    int *null_int = nullptr;
+    visualization.add_data_structure(null_int);
+
+    char **null_charptr = nullptr;
+    visualization.add_data_structure(null_charptr);
+
+    std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
+}
+
+
+void example_6_user_defined_tree()
+{
+    cdv::visualization<std::string> visualization;
+
+    TreeNode root{"root"};
+
+    //              root
+    //             /    \
+    //            a      b
+    //           / \    / \
+    //          c   d  e   f
+
+    root.left = std::make_unique<TreeNode>("a");
+    root.right = std::make_unique<TreeNode>("b");
+    root.left->left = std::make_unique<TreeNode>("c");
+    root.left->right = std::make_unique<TreeNode>("c");
+    root.right->left = std::make_unique<TreeNode>("e");
+    root.right->right = std::make_unique<TreeNode>("f");
+
+    visualization.add_data_structure(root);
+
+    std::cout << cdv::generate_dot_visualization_string(visualization) << "\n";
+}
+
 
 void big_example()
 {
@@ -243,6 +299,8 @@ int main()
     // example_1();
     // example_2_optional();
     // example_3_vector_of_struct();
-    example_4_user_defined_graph();
+    // example_4_user_defined_graph();
+    // example_5_nullptr();
+    example_6_user_defined_tree();
     return 0;
 }

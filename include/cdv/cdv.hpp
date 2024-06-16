@@ -56,6 +56,11 @@ uint64_t get_address_as_uint(const value_t *address)
 template <typename string_t, typename value_t>
 string_t get_address_as_string(value_t *address)
 {
+    if (address == nullptr)
+    {
+        return lit(string_t, "nullptr");
+    }
+
     if constexpr (std::is_same_v<typename string_t::value_type, char>)
     {
         std::stringstream stream;
@@ -1060,6 +1065,28 @@ struct access<std::pair<T1, T2>, 1> : std::true_type
     }
 };
 
+// std::unique_ptr<T>
+template <typename T>
+struct access<std::unique_ptr<T>, 0> : std::true_type
+{
+    static auto get_member_name()
+    {
+        return "pointer";
+    }
+    static const T *get_member_value(const std::unique_ptr<T> &instance)
+    {
+        return instance.get();
+    }
+    static constexpr member_display_type get_member_display_type()
+    {
+        return member_display_type::pointer_edge;
+    }
+    static bool display_member(const std::unique_ptr<T> &)
+    {
+        return true;
+    }
+};
+
 // std::optional<T>
 template <typename value_t>
 struct access<std::optional<value_t>, 0> : std::true_type
@@ -1107,6 +1134,8 @@ struct access<std::optional<value_t>, 1> : std::true_type
 
 namespace impl
 {
+constexpr uint64_t nullptr_pointer_node_id = 0;
+
 template <typename T>
 constexpr bool is_value_type()
 {
@@ -1117,8 +1146,9 @@ template <typename T>
 constexpr bool is_cstring_type_v = std::is_same_v<std::decay<T>, char *> || std::is_same_v<std::decay<T>, wchar_t *>;
 
 template <typename T>
-constexpr bool is_simple_type_v = std::is_fundamental_v<T> || std::is_constructible_v<std::basic_string<char>, T> ||
-                                  std::is_constructible_v<std::basic_string<wchar_t>, T>;
+constexpr bool is_simple_type_v =
+    (std::is_fundamental_v<T> || std::is_constructible_v<std::basic_string<char>, T> ||
+     std::is_constructible_v<std::basic_string<wchar_t>, T>)&&!(std::is_pointer_v<T> || std::is_null_pointer_v<T>);
 
 template <class T, template <class...> class Template>
 struct is_specialization : std::false_type
@@ -1148,8 +1178,12 @@ constexpr member_display_type get_data_display_type()
 {
     using unqualified_data_t = std::remove_const_t<std::remove_reference_t<std::remove_const_t<data_t>>>;
 
-    // Pointers => always a pointer arrow.
-    if constexpr (std::is_pointer_v<unqualified_data_t>)
+    // Pointers => always a pointer arrow (except for null pointers where we just write nullptr).
+    if constexpr (std::is_null_pointer_v<unqualified_data_t>)
+    {
+        return member_display_type::inside;
+    }
+    else if constexpr (std::is_pointer_v<unqualified_data_t>)
     {
         return member_display_type::pointer_edge;
     }
@@ -1395,13 +1429,14 @@ class visualization : public cluster<string_t>
                 node_for_data_structure.add_row(
                     std::move(member_name),
                     cell_t{impl::get_address_as_string<string_t>(member_value)}.with_port(port_name));
-
-                // Node for the value.
-                const uint64_t pointed_node_id = add_data_structure(*member_value);
-
-                // Edge from the cell to the value.
-                // TODO add_rows_for_members | proper arrow shape for 'pointer_edge'
-                add_edge(arrow<string_t>{instance_node_id, port_name, pointed_node_id, lit(string_t, "")});
+                if (member_value != nullptr)
+                {
+                    // Node for the pointed value.
+                    const uint64_t pointed_node_id = add_data_structure(*member_value);
+                    // Edge from the cell to the value.
+                    // TODO add_rows_for_members | proper arrow shape for 'pointer_edge'
+                    add_edge(arrow<string_t>{instance_node_id, port_name, pointed_node_id, lit(string_t, "")});
+                }
             }
         }
 
@@ -1477,39 +1512,72 @@ class visualization : public cluster<string_t>
 
     // For raw pointers.
     template <typename pointer_type_t>
-    uint64_t add_data_structure(const pointer_type_t &data_structure,
-                                std::enable_if_t<std::is_pointer_v<pointer_type_t>, bool> = true)
+    uint64_t add_data_structure(
+        const pointer_type_t &data_structure,
+        std::enable_if_t<std::is_pointer_v<pointer_type_t> && !std::is_null_pointer_v<pointer_type_t>, bool> = true)
     {
-        // First add a node for the pointed value (recursion).
-        const uint64_t pointed_value_node_id = add_data_structure(*data_structure);
-
-        // Then add a simple table node for the pointer:
-        // |---------------------------|
-        // |  <Type name> |  <Address> |
-        // |---------------------------|
-        // | <Value = Pointed address> |  <--- port = "ptr"
-        // |---------------------------|
-        string_t ptr_port_name{lit(string_t, "ptr")};
-        const uint64_t pointer_node_id = impl::get_node_id_for_value(data_structure);
-        if (has_node(pointer_node_id))
+        // Special case for the null pointer.
+        if (data_structure == nullptr)
         {
-            return pointer_node_id;
+            if (has_node(impl::nullptr_pointer_node_id))
+            {
+                return impl::nullptr_pointer_node_id;
+            }
+
+            auto node_for_pointer = table_node<string_t>{}.with_row(lit(string_t, "nullptr"));
+            add_node(impl::nullptr_pointer_node_id, std::move(node_for_pointer));
+            return impl::nullptr_pointer_node_id;
         }
 
-        auto pointer_type_name = impl::get_type_name_string<pointer_type_t, string_t>();
-        auto address_of_pointer = impl::get_address_as_string<string_t>(&data_structure);
-        auto node_for_pointer =
-            table_node<string_t>{}
-                .with_row(std::move(pointer_type_name), std::move(address_of_pointer))
-                .with_row(
-                    table_node<string_t>::cell::make(data_structure).spanning_columns(2).with_port(ptr_port_name));
-        add_node(pointer_node_id, std::move(node_for_pointer));
+        // General case.
+        else
+        {
+            // First add a node for the pointed value (recursion).
+            const uint64_t pointed_value_node_id = add_data_structure(*data_structure);
 
-        // Finally, add an edge between the two.
-        add_unique_edge(
-            arrow<string_t>{pointer_node_id, std::move(ptr_port_name), pointed_value_node_id, lit(string_t, "")});
+            // Then add a simple table node for the pointer:
+            // |---------------------------|
+            // |  <Type name> |  <Address> |
+            // |---------------------------|
+            // | <Value = Pointed address> |  <--- port = "ptr"
+            // |---------------------------|
+            string_t ptr_port_name{lit(string_t, "ptr")};
+            const uint64_t pointer_node_id = impl::get_node_id_for_value(data_structure);
+            if (has_node(pointer_node_id))
+            {
+                return pointer_node_id;
+            }
 
-        return pointer_node_id;
+            auto pointer_type_name = impl::get_type_name_string<pointer_type_t, string_t>();
+            auto address_of_pointer = impl::get_address_as_string<string_t>(&data_structure);
+            auto node_for_pointer =
+                table_node<string_t>{}
+                    .with_row(std::move(pointer_type_name), std::move(address_of_pointer))
+                    .with_row(
+                        table_node<string_t>::cell::make(data_structure).spanning_columns(2).with_port(ptr_port_name));
+            add_node(pointer_node_id, std::move(node_for_pointer));
+
+            // Finally, add an edge between the two.
+            add_unique_edge(
+                arrow<string_t>{pointer_node_id, std::move(ptr_port_name), pointed_value_node_id, lit(string_t, "")});
+
+            return pointer_node_id;
+        }
+    }
+
+    // For the null pointer type, to resolve ambiguous function calls when passing a nullptr_t to add_data_structure.
+    template <typename nullptr_type>
+    uint64_t add_data_structure(const nullptr_type &,
+                                std::enable_if_t<std::is_null_pointer_v<nullptr_type>, bool> = true)
+    {
+        if (has_node(impl::nullptr_pointer_node_id))
+        {
+            return impl::nullptr_pointer_node_id;
+        }
+
+        auto node_for_pointer = table_node<string_t>{}.with_row(lit(string_t, "nullptr"));
+        add_node(impl::nullptr_pointer_node_id, std::move(node_for_pointer));
+        return impl::nullptr_pointer_node_id;
     }
 
     // Special case for C-style strings.
