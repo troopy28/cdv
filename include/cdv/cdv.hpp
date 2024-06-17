@@ -1770,7 +1770,8 @@ template <typename string_t>
 [[nodiscard]] string_t generate_dot_visualization_string(const visualization<string_t> &visualization)
 {
     string_t result;
-    result.reserve(50000);
+    constexpr size_t estimated_characters_per_node = 1000; // TODO: find an actual estimation, this number is BS.
+    result.reserve(visualization.m_nodes.size() * estimated_characters_per_node);
 
     // 1. Graph setup, with all the cluster information of the global graph
     // (the global graph itself is a cluster).
